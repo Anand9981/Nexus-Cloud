@@ -1,0 +1,12 @@
+# Python environment
+venv/
+__pycache__/
+
+# Sensitive data
+.env
+*.pem
+*.key
+
+# System/IDE files
+.vscode/
+.DS_Store

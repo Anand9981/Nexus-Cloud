@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="space-y-12">
+    
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <div>
+            <h1 class="text-4xl font-sans font-extrabold tracking-tight text-slate-900 dark:text-white uppercase leading-none" style="font-family: 'Plus Jakarta Sans', sans-serif;">🛡️Secure Vault</h1>
+            <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Manage your private folders and cloud assets.</p>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="toggleFolderBox()" class="bg-nexus text-white px-6 py-3.5 rounded-2xl text-xs font-black hover:scale-105 transition-all shadow-lg shadow-blue-500/20">
+                ➕ New Folder
+            </button>
+            <button id="batchDeleteBtn" onclick="deleteSelectedImages()" class="hidden bg-rose-50 dark:bg-rose-900/20 text-rose-600 px-6 py-3.5 rounded-2xl text-xs font-black hover:bg-rose-600 hover:text-white transition-all shadow-sm border border-rose-100 dark:border-rose-800">
+                🗑️ Delete Selected (<span id="selectCount">0</span>)
+            </button>
+        </div>
+    </div>
+
+    <div id="new-folder-box" class="hidden mb-10 p-6 bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-xl animate-fadeIn">
+        <div class="flex flex-col sm:flex-row gap-3">
+            <input type="text" id="new-folder-name" placeholder="Enter Room Name (e.g. Work, Secret)..." 
+                class="flex-1 p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border-none outline-none focus:ring-2 focus:ring-nexus font-bold text-sm">
+            <button onclick="createNewFolderAjax()" class="bg-nexus text-white px-8 py-4 rounded-xl font-black text-xs">Made Folder</button>
+        </div>
+    </div>
+
+    {% if images %}
+    <section class="space-y-4">
+        <div class="flex items-center justify-between px-2">
+            <h3 class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">🔄 Recently Synced</h3>
+            <span class="text-[10px] font-bold text-nexus bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-full">
+                {% if images|length > 6 %} Active Batch {% else %} Recent 6 Items {% endif %}
+            </span>
+        </div>
+        <div class="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
+            {% set total_items = images|length %}
+            {% set display_limit = total_items if total_items > 6 else 6 %}
+            {% for img in images[:display_limit] %}
+            <div class="min-w-[200px] h-36 rounded-2xl overflow-hidden relative group shadow-md border-2 border-white dark:border-slate-800 transition-all hover:border-nexus">
+                <img src="{{ img.url }}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 select-none">
+                <div class="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent flex items-end p-4">
+                    <p class="text-[9px] text-white font-black truncate uppercase tracking-tighter">{{ img.filename }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="space-y-4">
+        <h3 class="text-[10px] font-black text-slate-400 dark:text-slate-500 tracking-[0.2em] ml-1 uppercase">Cloud Folders</h3>
+        
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            {% for folder in folders %}
+            
+            <div class="bg-gradient-to-b from-white/90 to-slate-50/50 dark:from-[#1E293B] dark:to-[#111827] rounded-[24px] border-2 border-slate-200/70 dark:border-slate-700/60 shadow-[0_15px_35px_-5px_rgba(148,163,184,0.18),0_5px_15px_-3px_rgba(148,163,184,0.1)] dark:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)] group hover:shadow-[0_20px_40px_-5px_rgba(59,130,246,0.18)] hover:border-blue-500/60 dark:hover:border-blue-500/50 transition-all duration-300 relative z-10 flex flex-col min-h-[190px]">
+                
+                <div class="absolute top-4 right-4" x-data="{ open: false }">
+                    <button @click="open = !open" class="text-slate-400 hover:text-nexus transition-all text-base font-bold px-1.5 py-0.5 relative z-30">⋮</button>
+                    
+                    <div x-show="open" @click.away="open = false" x-cloak 
+                         class="absolute right-0 mt-1 w-40 bg-white dark:bg-slate-800 shadow-2xl rounded-xl border border-slate-100 dark:border-slate-700 z-50 overflow-hidden text-left">
+                        <button onclick="copyFolderLink('{{ folder.folder_name }}')" class="w-full text-left px-4 py-2 text-[10px] font-black text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-b border-slate-50 dark:border-slate-700 uppercase tracking-tight flex items-center">🔗 Share</button>
+                        <button onclick="updatePrivacy('{{ folder._id }}', true)" class="w-full text-left px-4 py-2 text-[10px] font-black text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-700 border-b border-slate-50 dark:border-slate-700 uppercase tracking-tight flex items-center">🔓 Public</button>
+                        <button onclick="updatePrivacy('{{ folder._id }}', false)" class="w-full text-left px-4 py-2 text-[10px] font-black text-rose-500 hover:bg-rose-50 dark:hover:bg-slate-700 border-b border-slate-50 dark:border-slate-700 uppercase tracking-tight flex items-center">🔒 Private</button>
+                        <button onclick="renameFolderPrompt('{{ folder._id }}', '{{ folder.folder_name }}')" class="w-full text-left px-4 py-2 text-[10px] font-black text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-b border-slate-50 dark:border-slate-700 uppercase tracking-tight flex items-center">✏️ Rename</button>
+                        <button onclick="confirmDeleteFolder('{{ folder._id }}')" class="w-full text-left px-4 py-2 text-[10px] font-black text-red-600 hover:bg-red-50 dark:hover:bg-slate-700 uppercase tracking-tight flex items-center">🗑️ Delete</button>
+                    </div>
+                </div>
+
+                <div class="px-5 pt-5 flex items-center justify-start">
+                    <div class="w-10 h-10 bg-gradient-to-br from-white to-slate-100/80 dark:from-slate-800 dark:to-slate-900 border border-slate-200/60 dark:border-slate-700/80 rounded-xl flex items-center justify-center text-xl shadow-[0_4px_10px_-2px_rgba(0,0,0,0.05)] group-hover:scale-110 group-hover:rotate-2 transition-all duration-300 select-none">📁</div>
+                </div>
+
+                <div class="px-5 py-4 text-center flex flex-col items-center justify-center space-y-1 flex-1">
+                    <h4 class="text-[15px] font-black text-slate-800 dark:text-white uppercase tracking-tight truncate max-w-full leading-tight font-sans" style="font-family: 'Plus Jakarta Sans', sans-serif;">
+                        {{ folder.folder_name }}
+                    </h4>
+                    <p id="count-{{ folder._id }}" class="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none">
+                        {{ folder.asset_count or 0 }} Assets
+                    </p>
+                </div>
+
+                <div class="px-5">
+                    <div class="h-[1px] w-full bg-slate-200/70 dark:bg-slate-700/50"></div>
+                </div>
+
+                <div class="px-5 py-3.5 flex justify-between items-center select-none">
+                    <a href="/folder/{{ folder.folder_name }}" class="text-[7px] font-black text-nexus hover:text-blue-600 dark:hover:text-blue-400 transition-colors tracking-tight uppercase">Open Folder ➔</a>
+                    
+                    <div class="flex items-center gap-2">
+                        <span id="badge-{{ folder._id }}" class="text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider {{ 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' if folder.is_public else 'bg-rose-500/10 text-rose-600 dark:text-rose-400' }}">
+                            {{ 'Public' if folder.is_public else 'Private' }}
+                        </span>
+                        <div class="w-5 h-5 bg-blue-500/10 border border-blue-100 dark:border-blue-900/40 rounded-md flex items-center justify-center text-[10px]">
+                            {{ '🔓' if folder.is_public else '🔒' }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="space-y-6 pt-10 border-t border-slate-100 dark:border-slate-800">
+        <div class="flex justify-between items-center px-2">
+            <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">🗂️Master Library</h3>
+            <label class="flex items-center gap-3 cursor-pointer bg-white dark:bg-slate-800 px-5 py-2.5 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm hover:border-nexus transition-all select-none">
+                <input type="checkbox" id="selectAll" onclick="toggleSelectAll()" class="w-4 h-4 rounded-lg accent-nexus cursor-pointer">
+                <span class="text-[10px] font-black uppercase tracking-tighter">Select All</span>
+            </label>
+        </div>
+
+        {% if images %}
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {% for img in images %}
+            <div class="relative group aspect-square rounded-2xl overflow-hidden border-4 border-transparent hover:border-nexus/50 transition-all shadow-sm bg-slate-100 dark:bg-slate-800">
+                <div class="absolute top-4 left-4 z-30">
+                    <input type="checkbox" name="asset-select" value="{{ img._id }}" onchange="updateSelectionCount()" 
+                        class="w-6 h-6 rounded-xl accent-nexus opacity-0 group-hover:opacity-100 checked:opacity-100 transition-all cursor-pointer shadow-xl">
+                </div>
+                <img src="{{ img.url }}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 select-none">
+                <div class="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center p-4">
+                    <div class="flex gap-2 w-full">
+                        <button onclick="moveToTrash('{{ img._id }}')" class="flex-1 bg-white/10 backdrop-blur-md text-white py-2 rounded-xl text-[10px] font-black hover:bg-rose-500 transition-all">Move to Trash</button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="py-20 text-center select-none">
+            <div class="text-6xl mb-4">☁️</div>
+            <h3 class="text-lg font-black dark:text-white uppercase tracking-tighter">Vault is Empty</h3>
+            <p class="text-slate-500 text-xs font-medium">No assets found in your cloud storage.</p>
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+<script>
+    // --- FOLDER MANAGEMENT AJAX ---
+    function toggleFolderBox() { document.getElementById('new-folder-box').classList.toggle('hidden'); }
+
+    async function createNewFolderAjax() {
+        const name = document.getElementById('new-folder-name').value;
+        if(!name) return alert("Room name is mandatory.");
+        const res = await fetch('/create-folder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `folder_name=${encodeURIComponent(name)}`
+        });
+        const data = await res.json();
+        if(data.status === 'success') location.reload();
+    }
+
+    async function updatePrivacy(id, isPublic) {
+        const res = await fetch(`/update-folder-privacy/${id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_public: isPublic })
+        });
+        const data = await res.json();
+        if(data.status === 'success') location.reload();
+    }
+
+    // UPDATED: Standardized json payload alignment architecture tracking 
+    function renameFolderPrompt(id, currentName) {
+        const newName = prompt("Enter new room name:", currentName);
+        if (newName && newName !== currentName) {
+            fetch(`/rename-folder/${id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ new_name: newName })
+            }).then(res => res.json()).then(data => {
+                if(data.status === 'success') location.reload();
+                else alert(data.message || "Renaming failed.");
+            });
+        }
+    }
+
+    async function confirmDeleteFolder(id) {
+        if (confirm("⚠️ Deleting this folder will move all its images to Trash. Continue?")) {
+            const res = await fetch(`/delete-folder/${id}`, { method: 'POST' });
+            const data = await res.json();
+            if(data.status === 'success') {
+                alert("🔴Room moved to Trash Bin.");
+                location.reload();
+            } else {
+                alert("Failed to delete. Route might be missing in app.py.");
+            }
+        }
+    }
+
+    function copyFolderLink(name) {
+        const url = `${window.location.origin}/share-folder/${name}`;
+        navigator.clipboard.writeText(url).then(() => {
+            alert("Shared Room Link copied to clipboard!");
+        });
+    }
+
+    // --- BATCH OPERATIONAL ARRAYS ---
+    function updateSelectionCount() {
+        const checkboxes = document.getElementsByName('asset-select');
+        const selected = Array.from(checkboxes).filter(c => c.checked).length;
+        const btn = document.getElementById('batchDeleteBtn');
+        const countSpan = document.getElementById('selectCount');
+        if (selected > 0) { btn.classList.remove('hidden'); countSpan.innerText = selected; } 
+        else { btn.classList.add('hidden'); }
+    }
+
+    function toggleSelectAll() {
+        const master = document.getElementById('selectAll');
+        const checkboxes = document.getElementsByName('asset-select');
+        checkboxes.forEach(c => c.checked = master.checked);
+        updateSelectionCount();
+    }
+
+    async function deleteSelectedImages() {
+        const selected = Array.from(document.getElementsByName('asset-select')).filter(c => c.checked).map(c => c.value);
+        if (selected.length === 0) return;
+        if (confirm(`🚨Move ${selected.length} items to Trash?`)) {
+            const btn = document.getElementById('batchDeleteBtn');
+            btn.innerText = "Syncing...";
+            btn.disabled = true;
+            try {
+                for (let id of selected) { await fetch(`/move-to-trash/${id}`, { method: 'POST' }); }
+                location.reload();
+            } catch (err) { alert("Cloud Sync Failed!"); btn.disabled = false; }
+        }
+    }
+
+    async function moveToTrash(id) {
+        if(confirm("🚨Move this asset to Trash?")) {
+            const res = await fetch(`/move-to-trash/${id}`, { method: 'POST' });
+            if(res.ok) location.reload();
+        }
+    }
+</script>
+{% endblock %}

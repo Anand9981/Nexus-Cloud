@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="space-y-8">
+    
+    <div class="bg-white dark:bg-[#1E293B] rounded-[2rem] p-6 border border-slate-100 dark:border-slate-800 flex items-center gap-4 shadow-sm relative overflow-hidden">
+        <div class="absolute -top-10 -right-10 w-24 h-24 bg-nexus/5 rounded-full blur-2xl"></div>
+        
+        <div class="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center shadow-inner overflow-hidden border border-slate-200/50 dark:border-slate-700 shrink-0">
+            <img src="{{ uploader.profile_pic if uploader.profile_pic else '/static/images/avatars/ai-avatar-1.png' }}" 
+                 class="w-full h-full object-cover select-none"
+                 onerror="this.src='https://ui-avatars.com/api/?name={{ uploader.username }}&background=2563eb&color=fff';">
+        </div>
+        
+        <div class="min-w-0">
+            <div class="inline-flex bg-blue-50 dark:bg-blue-900/30 text-nexus text-[8px] font-black uppercase tracking-[0.15em] px-2.5 py-1 rounded-md mb-1">Public Cloud Architect</div>
+            <h1 class="text-xl font-black tracking-tight dark:text-white uppercase leading-none">{{ uploader.username }}</h1>
+            <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wider mt-1">Shared Workspace Matrix Portfolio</p>
+        </div>
+    </div>
+
+    <div class="space-y-3">
+        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">Verified Public Rooms</h3>
+        <div class="flex gap-3 overflow-x-auto pb-2 custom-scrollbar items-center">
+            
+            <button id="folder-tab-all" onclick="filterProfileFolder('all', this)" class="folder-filter-btn whitespace-nowrap px-4 py-2 rounded-xl font-bold text-[10px] border-2 border-nexus bg-nexus text-white shadow-md shadow-blue-500/10 transition-all cursor-pointer">
+                🏠 All Assets
+            </button>
+
+            {% if folders %}
+                {% for folder in folders %}
+                <button id="folder-tab-{{ loop.index }}" onclick="filterProfileFolder('{{ folder.folder_name }}', this)" class="folder-filter-btn whitespace-nowrap px-4 py-2 rounded-xl font-bold text-[10px] border-2 border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center gap-2 shadow-sm transition-all hover:border-nexus cursor-pointer">
+                    <span>📁 {{ folder.folder_name }}</span>
+                    <span class="bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded text-[8px] font-black text-nexus">{{ folder.asset_count }}</span>
+                </button>
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="space-y-4">
+        <h3 id="stream-heading" class="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">Shared Asset Stream (All)</h3>
+        
+        {% if images %}
+        <div id="profile-grid-wrapper">
+            <div id="profile-images-main-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {% for img in images %}
+                <div data-folder="{{ img.folder_name or 'General' }}" class="profile-image-card bg-white dark:bg-[#1E293B] rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden group hover:shadow-md transition-all duration-300 flex flex-col relative">
+                    
+                    <div class="aspect-square w-full max-h-[190px] overflow-hidden bg-slate-100 dark:bg-slate-900 relative flex-shrink-0 border-b border-slate-50 dark:border-slate-800/20">
+                        <img src="{{ img.url }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="{{ img.filename }}">
+                    </div>
+
+                    <div class="p-2 space-y-1 flex-1 flex flex-col justify-between bg-white dark:bg-[#1E293B]">
+                        
+                        <div class="flex items-center justify-between gap-1 pb-0.5">
+                            <div class="flex items-center gap-1 min-w-0">
+                                <span class="text-[8px]">📁</span>
+                                <p class="text-[7.5px] font-black text-slate-400 uppercase tracking-wider truncate">
+                                    ROOM: <span class="text-slate-600 dark:text-slate-300">{{ img.folder_name or 'General' }}</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-4 gap-px bg-slate-50/70 dark:bg-slate-900/50 p-0.5 rounded-lg border border-slate-100 dark:border-slate-800 text-center">
+                            <div class="flex flex-col items-center justify-center text-center cursor-pointer group/like" onclick="likePhotoProfile('{{ img._id }}')">
+                                <span class="text-[8px] group-hover/like:scale-110 transition-transform">❤️</span>
+                                <span id="likes-{{ img._id }}" class="text-[7.5px] font-black text-slate-600 dark:text-slate-400 mt-px leading-none">{{ img.likes or 0 }}</span>
+                            </div>
+                            <div class="flex flex-col items-center justify-center text-center cursor-pointer group/view" onclick="openLightboxProfile('{{ img.url }}', '{{ img._id }}')">
+                                <span class="text-[8px] group-hover/view:scale-110 transition-transform">👁️</span>
+                                <span id="views-{{ img._id }}" class="text-[7.5px] font-black text-slate-600 dark:text-slate-400 mt-px leading-none">{{ img.views or 0 }}</span>
+                            </div>
+                            <div class="flex flex-col items-center justify-center text-center cursor-pointer group/share" onclick="sharePhotoProfile('{{ img.url }}', '{{ img._id }}')">
+                                <span class="text-[8px] group-hover/share:scale-110 transition-transform">🔗</span>
+                                <span id="shares-{{ img._id }}" class="text-[7.5px] font-black text-slate-600 dark:text-slate-400 mt-px leading-none">{{ img.shares or 0 }}</span>
+                            </div>
+                            <a href="/download-image/{{ img._id }}" class="flex flex-col items-center justify-center text-center group/down block">
+                                <span class="text-[8px] group-hover/down:scale-110 transition-transform">📥</span>
+                                <span id="shares-{{ img._id }}" class="text-[7.5px] font-black text-slate-600 dark:text-slate-400 mt-px leading-none">{{ img.downloads or 0 }}</span>
+                            </a>
+                        </div>
+
+                        <div class="flex flex-wrap gap-0.5 pt-px overflow-hidden truncate whitespace-nowrap">
+                            {% if img.tags %}
+                                {% for tag in img.tags[:3] %}
+                                    <span class="text-[9px] font-black text-nexus bg-blue-50/40 dark:bg-blue-950/20 border border-blue-100/20 dark:border-blue-900/20 px-1 py-px rounded uppercase tracking-tight">
+                                        #{{ tag }}
+                                    </span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="text-[9px] font-black text-slate-300 uppercase tracking-tight">#UNTAGGED</span>
+                            {% endif %}
+                        </div>
+
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div id="profile-folder-empty-state" class="hidden w-full bg-white dark:bg-[#1E293B] rounded-3xl border border-slate-100 dark:border-slate-800/80 p-10 text-center space-y-3 shadow-inner animate-fadeIn">
+                <div class="text-4xl mx-auto filter drop-shadow">📭</div>
+                <h4 class="text-xs font-black dark:text-white uppercase tracking-wider">This Room is Currently Silent</h4>
+                <p class="text-[11px] font-medium text-slate-400 max-w-xs mx-auto leading-relaxed">No synchronized public assets have been deployed inside this specific directory perimeter yet.</p>
+            </div>
+        </div>
+        {% else %}
+        <div class="bg-white dark:bg-[#1E293B] rounded-2xl border border-slate-100 dark:border-slate-800 p-8 text-center text-slate-400 text-xs font-medium italic">
+            This workspace cloud storage repository stream is currently empty.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div id="lightbox-modal-profile" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md hidden z-[999] flex items-center justify-center p-4 animate-fadeIn" onclick="closeLightboxProfile()">
+    <div class="relative max-w-4xl max-h-[85vh] flex items-center justify-center" onclick="event.stopPropagation()">
+        <button onclick="closeLightboxProfile()" class="absolute -top-12 right-0 text-white bg-white/10 hover:bg-white/20 w-10 h-10 rounded-full font-black text-sm transition-all">✕</button>
+        <img id="lightbox-image-target-profile" src="" class="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl border border-white/10">
+    </div>
+</div>
+
+<script>
+    function filterProfileFolder(folderName, clickedButton) {
+        const cards = document.querySelectorAll('.profile-image-card');
+        const heading = document.getElementById('stream-heading');
+        const mainGrid = document.getElementById('profile-images-main-grid');
+        const emptyState = document.getElementById('profile-folder-empty-state');
+        
+        // 1. Heading parameters refresh
+        if (folderName === 'all') {
+            heading.innerText = "Shared Asset Stream (All)";
+        } else {
+            heading.innerText = `Shared Asset Stream (${folderName.toUpperCase()})`;
+        }
+
+        // 2. Loop rendering filtering logic
+        let visibleCount = 0;
+        cards.forEach(card => {
+            // Trim and clean formatting comparison alignment
+            const cardFolder = card.getAttribute('data-folder').trim();
+            const targetFolder = folderName.trim();
+            
+            if (folderName === 'all' || cardFolder === targetFolder) {
+                card.style.display = 'flex';
+                visibleCount++;
+            } else {
+                card.style.display = 'none';
+            }
+        });
+
+        // 3. Pyara Msg Trigger: Handle displaying empty alert vectors dynamically
+        if (visibleCount === 0) {
+            if(mainGrid) mainGrid.classList.add('hidden');
+            if(emptyState) emptyState.classList.remove('hidden');
+        } else {
+            if(mainGrid) mainGrid.classList.remove('hidden');
+            if(emptyState) emptyState.classList.add('hidden');
+        }
+
+        // 4. Tab highlighting updates using explicit element references (Completely bug-free)
+        const allButtons = document.querySelectorAll('.folder-filter-btn');
+        allButtons.forEach(btn => {
+            // Reset styles for regular buttons
+            btn.className = "folder-filter-btn whitespace-nowrap px-4 py-2 rounded-xl font-bold text-[10px] border-2 border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center gap-2 shadow-sm transition-all hover:border-nexus cursor-pointer";
+        });
+
+        // Apply active blue high-contrast style on the specific clicked element reference parameter
+        if (clickedButton) {
+            clickedButton.className = "folder-filter-btn whitespace-nowrap px-4 py-2 rounded-xl font-bold text-[10px] border-2 border-nexus bg-nexus text-white shadow-md shadow-blue-500/10 flex items-center gap-2 transition-all cursor-pointer";
+        }
+    }
+
+    // INTERACTION ACTION LAYER PROTOCOLS
+    function likePhotoProfile(id) {
+        fetch('/like-image/' + id, { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            if(d.status === 'success') {
+                const count = document.getElementById('likes-' + id);
+                count.innerText = d.new_likes;
+            }
+        });
+    }
+
+    function sharePhotoProfile(url, id) {
+        navigator.clipboard.writeText(url).then(() => {
+            fetch('/share-image/' + id, { method: 'POST' });
+            const sc = document.getElementById('shares-' + id);
+            sc.innerText = parseInt(sc.innerText) + 1;
+            alert("Nexus Cloud: Public asset link copied to clipboard!");
+        });
+    }
+
+    function openLightboxProfile(imageUrl, imgId) {
+        document.getElementById('lightbox-image-target-profile').src = imageUrl;
+        document.getElementById('lightbox-modal-profile').classList.remove('hidden');
+        fetch(`/increment-view/${imgId}`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') {
+                const viewEl = document.getElementById(`views-${imgId}`);
+                if(viewEl) viewEl.innerText = data.new_views;
+            }
+        });
+    }
+
+    function closeLightboxProfile() {
+        document.getElementById('lightbox-modal-profile').classList.add('hidden');
+        document.getElementById('lightbox-image-target-profile').src = "";
+    }
+</script>
+{% endblock %}

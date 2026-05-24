@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex flex-col items-center justify-center py-20 text-center animate-fadeIn {% if text_override %}security-breach-mode{% endif %}">
+    
+    <div class="relative mb-12">
+        {% if text_override %}
+            <h1 class="text-[12rem] font-black text-rose-500/10 dark:text-rose-500/20 leading-none select-none tracking-tight animate-pulse">401</h1>
+        {% else %}
+            <h1 class="text-[12rem] font-black text-slate-100 dark:text-slate-800/50 leading-none select-none">404</h1>
+        {% endif %}
+        
+        <div class="absolute inset-0 flex items-center justify-center">
+            {% if text_override %}
+                <div class="w-24 h-24 bg-rose-500 text-white rounded-[2rem] shadow-2xl shadow-rose-500/40 flex items-center justify-center text-4xl animate-bounce border border-rose-400 core-radar-glow">
+                    ⚠️
+                </div>
+            {% else %}
+                <div class="w-24 h-24 bg-white dark:bg-slate-800 rounded-[2rem] shadow-2xl flex items-center justify-center text-5xl animate-bounce border border-slate-100 dark:border-slate-700">
+                    🔍
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="space-y-4 max-w-xl mx-auto px-4">
+        {% if text_override %}
+            <h2 class="text-3xl font-black text-rose-600 dark:text-rose-500 tracking-tighter uppercase">Identity Verification Fault</h2>
+        {% else %}
+            <h2 class="text-3xl font-black dark:text-white tracking-tighter">Lost in the Cloud?</h2>
+        {% endif %}
+        
+        <div class="p-5 rounded-2xl transition-all duration-300 {% if text_override %}bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100/50 dark:border-rose-900/30{% endif %}">
+            <p class="text-slate-500 dark:text-slate-400 font-bold text-sm leading-relaxed">
+                {% if text_override %}
+                    {{ text_override }}
+                {% else %}
+                    The digital asset or page you are looking for has drifted beyond our cloud horizon. Don't worry, try again later.
+                {% endif %}
+            </p>
+        </div>
+    </div>
+
+    <div class="flex flex-col sm:flex-row gap-4 mt-12 z-10">
+        <a href="/" class="px-10 py-4 rounded-2xl font-black text-xs shadow-xl transition-all flex items-center justify-center gap-2 {% if text_override %}bg-rose-600 text-white shadow-rose-500/20 hover:bg-rose-700{% else %}bg-nexus text-white shadow-blue-500/30 hover:scale-105{% endif %}">
+            🏠 Return to Dashboard
+        </a>
+        <button onclick="history.back()" class="bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-10 py-4 rounded-2xl font-black text-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
+            ⬅️ Go Back Terminal
+        </button>
+    </div>
+
+    <div class="mt-24 opacity-20">
+        <p class="text-[10px] font-black uppercase tracking-[0.3em] dark:text-slate-500">Nexus Cloud • Core Security Interceptor</p>
+    </div>
+</div>
+
+<style>
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fadeIn { animation: fadeIn 0.6s ease-out; }
+    
+    /* Cyber Threat Alert Glow Matrix Properties */
+    .security-breach-mode .core-radar-glow {
+        box-shadow: 0 0 25px rgba(244, 63, 94, 0.6);
+        animation: bounce 1s infinite, pulseGlow 2s infinite alternate;
+    }
+    
+    @keyframes pulseGlow {
+        from { box-shadow: 0 0 15px rgba(244, 63, 94, 0.4); }
+        to { box-shadow: 0 0 35px rgba(244, 63, 94, 0.8); }
+    }
+</style>
+{% endblock %}

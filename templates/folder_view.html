@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Toast Notification -->
+<div id="center-toast" class="fixed inset-0 z-[2000] hidden flex items-center justify-center pointer-events-none">
+    <div class="bg-[#1d916e] text-white px-8 py-4 rounded-full font-black text-[12px] uppercase tracking-widest shadow-2xl animate-bounce">
+        🚀 Assets Moved Successfully!
+    </div>
+</div>
+
+<div class="space-y-10">
+    
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-slate-100 dark:border-slate-800 pb-10">
+        <div class="flex items-center gap-5">
+            <div class="w-16 h-16 bg-nexus/10 dark:bg-blue-900/20 rounded-[1.8rem] flex items-center justify-center text-3xl shadow-inner ring-1 ring-nexus/10 transition-transform hover:rotate-6">📁</div>
+            <div>
+                <div class="flex items-center gap-3">
+                    <h1 class="text-4xl font-sans font-extrabold tracking-tight text-slate-900 dark:text-white uppercase leading-none" style="font-family: 'Plus Jakarta Sans', sans-serif;">{{ folder_name }}</h1>
+                    <span class="bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px] font-black px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700">
+                        {{ images|length }} Assets
+                    </span>
+                </div>
+                <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mt-1 uppercase tracking-widest text-[10px]">Cloud Folder</p>
+            </div>
+        </div>
+        
+        <div class="flex gap-3 w-full md:w-auto">
+            <a href="/my-vault" class="flex-1 md:flex-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-6 py-3.5 rounded-2xl text-[11px] font-black hover:bg-slate-50 transition-all flex items-center justify-center gap-2 shadow-sm">
+                <span>⬅️</span> Vault
+            </a>
+            <a href="/?select_folder={{ folder_name }}" class="flex-1 md:flex-none bg-nexus text-white px-8 py-3.5 rounded-2xl text-[11px] font-black shadow-lg shadow-blue-500/20 hover:scale-[1.03] active:scale-95 transition-all text-center">
+                ➕ Sync New Asset
+            </a>
+        </div>
+    </div>
+
+    {% if images %}
+    <div class="flex items-center justify-between bg-white dark:bg-[#1E293B] p-4 rounded-2xl border border-slate-100 dark:border-slate-800 mb-6 shadow-sm">
+        <div class="flex items-center gap-3">
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" id="master-folder-select-all" onclick="toggleAllFolderAssets(this)" class="w-4 h-4 rounded text-nexus focus:ring-nexus border-slate-300">
+                <span class="text-xs font-black text-slate-500 uppercase tracking-wider">Select All Assets</span>
+            </label>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="openMoveModal()" id="move-btn" class="hidden bg-blue-600 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-blue-500 transition-all">
+                Move Selected
+            </button>
+            <button onclick="executeBulkFolderTrash()" class="bg-rose-50 hover:bg-rose-100 text-rose-600 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm">
+                🗑️ Delete Selected Assets
+            </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+        {% for img in images %}
+        <div id="asset-{{ img._id }}" class="group bg-white dark:bg-[#1E293B] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col relative">
+            
+            <div class="absolute top-2.5 left-2.5 z-20 bg-white/80 dark:bg-slate-900/80 p-1 rounded-lg backdrop-blur-sm shadow-sm">
+                <input type="checkbox" name="asset_ids_to_trash" value="{{ img._id }}" class="asset-folder-checkbox w-3.5 h-3.5 rounded text-nexus focus:ring-nexus border-slate-300 cursor-pointer" onchange="evaluateFolderSelectAllState()">
+            </div>
+
+            <div class="relative h-52 overflow-hidden flex-shrink-0 border-b border-slate-50 dark:border-slate-800/20">
+                <img src="{{ img.url }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                
+                <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
+                    <button onclick="moveToTrash('{{ img._id }}')" 
+                        class="w-10 h-10 bg-rose-500 text-white rounded-xl flex items-center justify-center shadow-xl hover:scale-110 active:scale-90 transition-all">
+                        <span class="text-lg">🗑️</span>
+                    </button>
+                </div>
+
+                <div class="absolute bottom-2 left-2 bg-slate-900/70 backdrop-blur-md text-white px-2.5 py-1 rounded-full z-10 flex items-center">
+                    <div class="cursor-pointer group/view flex items-center gap-1.5" onclick="openImageLightbox('{{ img.url }}', '{{ img._id }}')">
+                        <p class="text-xs group-hover/view:scale-110 transition-transform leading-none">👁️</p>
+                        <span id="views-{{ img._id }}" class="text-[8px] font-black text-white block leading-none">{{ img.views or 0 }}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="py-1 px-1.5 space-y-0.5 flex-1 flex flex-col justify-between bg-white dark:bg-[#1E293B]">
+                <div class="flex items-center justify-between gap-1">
+                    <div class="flex items-center gap-0.5 min-w-0">
+                        <span class="text-[7.5px] font-black text-slate-400 uppercase tracking-wider">Status:</span>
+                        <span class="text-[7.5px] font-black text-emerald-500 uppercase tracking-wide truncate">Distributed</span>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-0.5 pt-0 overflow-hidden truncate whitespace-nowrap">
+                    {% if img.tags %}
+                        {% for tag in img.tags[:4] %}
+                        <span class="text-[9px] font-black text-nexus bg-blue-50/40 dark:bg-blue-950/20 border border-blue-100/20 dark:border-blue-900/20 px-1.5 py-0.5 rounded uppercase tracking-tight">#{{ tag }}</span>
+                        {% endfor %}
+                    {% else %}
+                        <span class="text-[9px] font-black text-slate-300 uppercase tracking-tight">No AI Tags</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="flex flex-col items-center justify-center py-40 text-center">
+        <div class="w-28 h-28 bg-slate-50 dark:bg-slate-900 rounded-[3rem] flex items-center justify-center text-6xl mb-8 shadow-inner animate-pulse">📁</div>
+        <h3 class="text-xl font-black uppercase tracking-tighter dark:text-white">Directory is Idle</h3>
+        <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mt-3 max-w-sm mx-auto leading-relaxed">
+            This directory room is currently empty. Synchronize your digital assets to begin AI object detection.
+        </p>
+        <a href="/?select_folder={{ folder_name }}" class="mt-10 inline-flex items-center bg-nexus text-white px-10 py-4 rounded-2xl font-black text-xs shadow-lg shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all">
+            Upload to {{ folder_name }} ➔
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Move Modal -->
+<div id="move-modal" class="hidden fixed inset-0 bg-slate-950/50 flex items-center justify-center z-[1000] p-4">
+    <div class="bg-white dark:bg-[#1E293B] p-6 rounded-2xl w-80 shadow-2xl border border-slate-700">
+        <h4 class="text-xs font-black uppercase text-slate-800 dark:text-white mb-4">Select Destination</h4>
+        <select id="target-folder-select" class="w-full p-3 rounded-xl bg-slate-100 dark:bg-slate-900 mb-4 text-xs font-bold border-none outline-none">
+            {% for folder in all_user_folders %}
+            <option value="{{ folder.folder_name }}">{{ folder.folder_name }}</option>
+            {% endfor %}
+        </select>
+        <div class="flex gap-2">
+            <button onclick="closeMoveModal()" class="flex-1 bg-slate-200 py-2 rounded-lg text-xs font-black">Cancel</button>
+            <button onclick="submitMoveAssets()" class="flex-1 bg-nexus text-white py-2 rounded-lg text-xs font-black uppercase">Confirm Move</button>
+        </div>
+    </div>
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md hidden z-[999] flex items-center justify-center p-4 animate-fadeIn" onclick="closeImageLightbox()">
+    <div class="relative max-w-4xl max-h-[85vh] flex items-center justify-center" onclick="event.stopPropagation()">
+        <button onclick="closeImageLightbox()" class="absolute -top-12 right-0 text-white bg-white/10 hover:bg-white/20 w-10 h-10 rounded-full font-black text-sm transition-all">✕</button>
+        <img id="lightbox-image-target" src="" class="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl border border-white/10">
+    </div>
+</div>
+
+<script>
+    function toggleAllFolderAssets(masterCheckbox) {
+        const itemCheckboxes = document.querySelectorAll('.asset-folder-checkbox');
+        itemCheckboxes.forEach(cb => cb.checked = masterCheckbox.checked);
+        evaluateFolderSelectAllState();
+    }
+
+    function evaluateFolderSelectAllState() {
+        const checkedBoxes = document.querySelectorAll('.asset-folder-checkbox:checked');
+        const moveBtn = document.getElementById('move-btn');
+        const master = document.getElementById('master-folder-select-all');
+        const items = document.querySelectorAll('.asset-folder-checkbox');
+        
+        // Show/Hide Move Button
+        if (moveBtn) moveBtn.classList.toggle('hidden', checkedBoxes.length === 0);
+        
+        if (master) {
+            master.checked = (items.length === checkedBoxes.length && items.length > 0);
+        }
+    }
+
+    function openMoveModal() { document.getElementById('move-modal').classList.remove('hidden'); }
+    function closeMoveModal() { document.getElementById('move-modal').classList.add('hidden'); }
+
+    async function submitMoveAssets() {
+        const checkedBoxes = document.querySelectorAll('.asset-folder-checkbox:checked');
+        const assetIds = Array.from(checkedBoxes).map(cb => cb.value);
+        const targetFolder = document.getElementById('target-folder-select').value;
+
+        closeMoveModal();
+        const toast = document.getElementById('center-toast');
+        toast.classList.remove('hidden');
+
+        try {
+            const res = await fetch('/move-assets', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ asset_ids: assetIds, target_folder: targetFolder })
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                setTimeout(() => { location.reload(); }, 1500);
+            } else {
+                toast.classList.add('hidden');
+                alert(data.message);
+            }
+        } catch (err) {
+            toast.classList.add('hidden');
+            alert("Connection error.");
+        }
+    }
+
+    async function moveToTrash(id) {
+        if(confirm("🚨 Move this asset to Trash?")) {
+            const res = await fetch(`/move-to-trash/${id}`, { method: 'POST' });
+            const data = await res.json();
+            if(data.status === 'success') location.reload();
+        }
+    }
+
+    async function executeBulkFolderTrash() {
+        const checkedBoxes = document.querySelectorAll('.asset-folder-checkbox:checked');
+        if (checkedBoxes.length === 0) return alert("Select at least one asset.");
+        if (confirm(`Move ${checkedBoxes.length} images to Trash?`)) {
+            const assetIds = Array.from(checkedBoxes).map(cb => cb.value);
+            const res = await fetch('/bulk-trash-assets', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ asset_ids: assetIds })
+            });
+            if ((await res.json()).status === 'success') location.reload();
+        }
+    }
+
+    function openImageLightbox(imageUrl, imgId) {
+        document.getElementById('lightbox-image-target').src = imageUrl;
+        document.getElementById('lightbox-modal').classList.remove('hidden');
+        fetch(`/increment-view/${imgId}`, { method: 'POST' });
+    }
+
+    function closeImageLightbox() {
+        document.getElementById('lightbox-modal').classList.add('hidden');
+    }
+</script>
+{% endblock %}

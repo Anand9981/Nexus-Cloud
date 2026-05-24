@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="fixed inset-0 lg:ml-64 flex flex-col lg:flex-row bg-white dark:bg-[#0F172A] z-50 select-none">
+    
+    <div id="signup-toast-node" class="fixed top-6 right-6 z-[999] hidden p-4 rounded-2xl shadow-xl transition-all duration-300 transform translate-y-[-20px] flex items-center gap-3 font-black text-xs uppercase tracking-wide max-w-sm bg-emerald-500 text-white">
+        <span>✅</span>
+        <p id="signup-toast-message" class="leading-none">Your Identity Created Successfully!</p>
+    </div>
+    
+    <div class="hidden lg:flex flex-1 bg-gradient-to-br from-[#F0F4FA] via-[#FCF2F6] to-[#E2EBF8] dark:from-[#090D16] dark:to-[#090D16] relative overflow-hidden items-center justify-center p-20 border-r border-slate-200/80 dark:border-slate-800/40">
+        
+        <div class="absolute inset-0 block bg-[radial-gradient(#cbd5e1_1px,transparent_0)] dark:bg-[radial-gradient(#2563eb_1px,transparent_0)] opacity-[0.4] dark:opacity-[0.12] [background-size:26px_26px] pointer-events-none"></div>
+        
+        <div class="w-full max-w-[360px] z-10 space-y-8 flex flex-col items-center lg:items-start text-center lg:text-left">
+            
+            <div class="w-20 h-20 bg-gradient-to-br from-white/30 to-white/5 dark:from-slate-900/60 dark:to-slate-950/40 backdrop-blur-xl rounded-[2rem] border border-pink-200/40 dark:border-slate-800/60 flex items-center justify-center text-4xl shadow-[0_20px_40px_-10px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(56,189,248,0.15)] mx-auto lg:mx-0 animate-[coreFloat_5s_ease-in-out_infinite]">
+                <svg class="w-11 h-11" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M38 85C24 85 14 74 14 60C14 47 23 37 35 35.5C39 21 52 12 66 12C81 12 93 23 94.5 37.5C95.5 37.5 96.5 37.5 97 37.5C106 37.5 113 44.5 113 53.5C113 62.5 106 69.5 97 69.5H95C92 78.5 84 85 74.5 85H38Z" stroke="url(#signupCloudGrad)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <defs>
+                        <linearGradient id="signupCloudGrad" x1="14" y1="12" x2="113" y2="85" gradientUnits="userSpaceOnUse">
+                            <stop offset="0%" stop-color="#38bdf8"/>
+                            <stop offset="50%" stop-color="#2563eb"/>
+                            <stop offset="100%" stop-color="#6366f1"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+            
+            <div class="space-y-4">
+                <h1 class="text-[44px] font-black tracking-tighter leading-[0.9] text-slate-900 dark:text-white uppercase font-sans">
+                    Join the Cloud<br><span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 dark:from-cyan-400 dark:via-blue-400 dark:to-indigo-300">Revolution.</span>
+                </h1>
+                <p class="text-slate-500 dark:text-slate-400 text-[11px] font-bold uppercase tracking-wide max-w-[280px]">
+                    Experience AI-driven asset management with secure military-grade structural encryption protocols.
+                </p>
+            </div>
+            
+            <div class="h-[1px] w-16 bg-slate-300 dark:bg-slate-800"></div>
+            
+            <div class="space-y-3 w-full">
+                <div class="flex items-center gap-4 bg-white/80 dark:bg-[#0E1524]/90 backdrop-blur-md p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800/80 shadow-[0_8px_30px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_40px_rgba(0,0,0,0.3)] hover:border-pink-200/60 transition-all duration-300 transform hover:-translate-y-0.5 group">
+                    <span class="text-2xl filter drop-shadow group-hover:scale-110 transition-transform">🤖</span>
+                    <div class="space-y-0.5">
+                        <p class="text-[8.5px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 leading-none">AI Rekognition</p>
+                        <p class="text-[12px] font-black text-blue-600 dark:text-cyan-400 tracking-tight leading-none">Automatic Object Tagging</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4 bg-white/80 dark:bg-[#0E1524]/90 backdrop-blur-md p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800/80 shadow-[0_8px_30px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_40px_rgba(0,0,0,0.3)] hover:border-pink-200/60 transition-all duration-300 transform hover:-translate-y-0.5 group">
+                    <span class="text-2xl filter drop-shadow group-hover:scale-110 transition-transform">🛡️</span>
+                    <div class="space-y-0.5">
+                        <p class="text-[8.5px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 leading-none">Secure Vault</p>
+                        <p class="text-[12px] font-black text-indigo-600 dark:text-indigo-400 tracking-tight leading-none">Private Directory Control</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-1 flex items-start lg:items-center justify-center p-8 pt-16 sm:pt-24 lg:pt-8 overflow-y-auto custom-scrollbar bg-white dark:bg-[#0F172A]">
+        <div class="w-full max-w-[360px] space-y-8 py-6">
+            <div class="text-center lg:text-left space-y-1">
+                <h2 class="text-3xl font-black tracking-tight text-slate-900 dark:text-white uppercase font-sans">Create Account</h2>
+                <p class="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest">Start your 30-day free cloud trial today</p>
+            </div>
+
+            <form id="signupForm" method="POST" class="space-y-5">
+                <div class="space-y-4.5">
+                    <div class="space-y-1.5">
+                        <label class="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Email Address</label>
+                        <div class="relative group/input">
+                            <span class="absolute left-4 top-4 text-slate-400 text-xs transition-colors group-focus-within/input:text-blue-600">📧</span>
+                            <input type="email" name="email" placeholder="name@company.com" required
+                                class="w-full p-4 pl-11 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-[#0F172A] focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all font-bold text-xs shadow-inner">
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label class="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Username</label>
+                        <div class="relative group/input">
+                            <span class="absolute left-4 top-4 text-slate-400 text-xs transition-colors group-focus-within/input:text-blue-600">👤</span>
+                            <input type="text" name="username" placeholder="nexus_explorer" required
+                                class="w-full p-4 pl-11 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-[#0F172A] focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all font-bold text-xs shadow-inner">
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label class="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Secure Password</label>
+                        <div class="relative group/input">
+                            <span class="absolute left-4 top-4 text-slate-400 text-xs transition-colors group-focus-within/input:text-blue-600">🔑</span>
+                            <input type="password" name="password" id="password" placeholder="••••••••" required
+                                onkeyup="checkStrength(this.value)"
+                                class="w-full p-4 pl-11 pr-11 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-[#0F172A] focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all font-bold text-xs shadow-inner">
+                            
+                            <button type="button" onclick="togglePasswordVisibility()" class="absolute right-4 top-4 text-slate-400 hover:text-blue-600 transition-all focus:outline-none text-xs">
+                                <span id="eye-icon">👁️</span>
+                            </button>
+                        </div>
+                        
+                        <div class="px-1 pt-1.5">
+                            <div class="flex justify-between items-center mb-1.5">
+                                <span class="text-[8px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Security Strength</span>
+                                <span id="strengthText" class="text-[8px] font-black uppercase tracking-wider">None</span>
+                            </div>
+                            <div class="w-full bg-slate-100 dark:bg-slate-800 h-1 rounded-full overflow-hidden">
+                                <div id="strengthBar" class="h-full w-0 transition-all duration-500"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 pt-3 border-t border-slate-100 dark:border-slate-800/60">
+                        <div class="space-y-1.5">
+                            <label class="text-[8.5px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block ml-1">Account Recovery Question</label>
+                            <select name="security_question" required 
+                                    class="w-full p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-[#0F172A] text-[11px] font-bold outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all shadow-inner appearance-none cursor-pointer">
+                                <option value="" disabled selected>Select a secret backup verification question...</option>
+                                <option value="What was the name of your first school?">What was the name of your first school?</option>
+                                <option value="What is your favorite high-protein food item?">What is your favorite high-protein food item?</option>
+                                <option value="What is the name of your childhood hometown?">What is the name of your childhood hometown?</option>
+                                <option value="What was the model of your first vehicle/scooter?">What was the model of your first vehicle/scooter?</option>
+                                <option value="What is your favorite programming language name?">What is your favorite programming language name?</option>
+                            </select>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <label class="text-[8.5px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block ml-1">Secret Security Answer</label>
+                            <div class="relative flex items-center group/input">
+                                <input type="password" id="signup-security-answer" name="security_answer" required placeholder="Type your secret answer here..."
+                                       class="w-full p-3.5 pr-11 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-[#0F172A] text-[11px] font-bold outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all shadow-inner">
+                                <button type="button" onclick="toggleFieldVisibility('signup-security-answer', this)" class="absolute right-4 text-xs grayscale select-none cursor-pointer focus:outline-none">👁️</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-black text-[11px] uppercase tracking-wider shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transform hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all mt-4 cursor-pointer">
+                    Create My Nexus Identity ➔
+                </button>
+            </form>
+
+            <div class="pt-5 text-center border-t border-slate-100 dark:border-slate-800/60">
+                <p class="text-slate-400 dark:text-slate-500 text-xs font-bold">
+                    Already a member of Nexus? 
+                    <a href="/login" class="text-blue-600 font-black hover:underline ml-1 uppercase tracking-tighter">Sign In Here</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ✅ DYNAMIC REAL-TIME AJAX SIGNUP & ERROR TOAST PIPELINE
+    document.getElementById('signupForm').addEventListener('submit', async function(e) {
+        e.preventDefault(); // Default page refresh submit ko roko
+        
+        const toast = document.getElementById('signup-toast-node');
+        const toastMessage = document.getElementById('signup-toast-message');
+        const formData = new FormData(this);
+        
+        try {
+            // Backend ke /signup route par data stream bhejo
+            const response = await fetch('/signup', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json(); // Backend se JSON response catch karo
+            
+            if (result.status === 'success') {
+                // 🟢 CASE 1: AGAR SUCCESSFUL HUA TO GREEN TOAST
+                toast.className = "fixed top-6 right-6 z-[999] p-4 rounded-2xl shadow-xl transition-all duration-300 transform translate-y-0 flex items-center gap-3 font-black text-xs uppercase tracking-wide max-w-sm bg-emerald-500 text-white";
+                toastMessage.innerText = "✅ Identity Created Successfully!";
+                toast.classList.remove('hidden');
+                
+                // 2 second ka gap dekar dashboard/login par bhej do
+                setTimeout(() => { window.location.href = '/login'; }, 2000);
+            } else {
+                // 🔴 CASE 2: AGAR BACKEND SE ERROR AAYA TO RED POP-UP TOAST
+                toast.className = "fixed top-6 right-6 z-[999] p-4 rounded-2xl shadow-2xl transition-all duration-300 transform translate-y-0 flex items-center gap-3 font-black text-xs uppercase tracking-wide max-w-sm bg-rose-600 text-white border border-rose-500 animate-[bounce_0.5s_ease-in-out_1]";
+                toastMessage.innerText = "❌ Fail: " + (result.message || "Registration Failed.");
+                toast.classList.remove('hidden');
+                
+                // 3.5 second baad alert box ko smoothly auto-dismiss kar do taaki user edit kar sake
+                setTimeout(() => { toast.classList.add('hidden'); }, 3500);
+            }
+        } catch (err) {
+            // 🟡 CASE 3: NETWORK DOWN YA CONNECTION BREAK HONE PAR ORANGE ALERT
+            toast.className = "fixed top-6 right-6 z-[999] p-4 rounded-2xl shadow-xl transition-all duration-300 transform translate-y-0 flex items-center gap-3 font-black text-xs uppercase tracking-wide max-w-sm bg-amber-500 text-white";
+            toastMessage.innerText = "⚠️ Network Framework Error! Connection Refused.";
+            toast.classList.remove('hidden');
+            
+            setTimeout(() => { toast.classList.add('hidden'); }, 3500);
+        }
+    });
+
+    // Toggle primary login asset password mask visibility
+    function togglePasswordVisibility() {
+        const passField = document.getElementById("password");
+        const icon = document.getElementById("eye-icon");
+        if (passField.type === "password") {
+            passField.type = "text";
+            icon.innerText = "🙈"; 
+        } else {
+            passField.type = "password";
+            icon.innerText = "👁️";
+        }
+    }
+
+    // Toggle field visibility mask framework for recovery token item
+    function toggleFieldVisibility(fieldId, element) {
+        const inputField = document.getElementById(fieldId);
+        if (inputField.type === "password") {
+            inputField.type = "text";
+            element.style.opacity = "0.5";
+        } else {
+            inputField.type = "password";
+            element.style.opacity = "1";
+        }
+    }
+
+    // Evaluate credential safety metrics dynamically
+    function checkStrength(password) {
+        let bar = document.getElementById("strengthBar");
+        let text = document.getElementById("strengthText");
+        let strength = 0;
+
+        if (password.length >= 8) strength++;
+        if (password.match(/[A-Z]/)) strength++;
+        if (password.match(/[0-9]/)) strength++;
+        if (password.match(/[@$!%*?&#]/)) strength++;
+
+        const colors = ["#ef4444", "#f59e0b", "#3b82f6", "#10b981"];
+        const labels = ["Weak", "Fair", "Strong", "Very Secure"];
+        
+        if (password.length === 0) {
+            bar.style.width = "0%";
+            text.innerText = "None";
+            return;
+        }
+
+        let index = Math.min(strength, 3);
+        bar.style.width = ((index + 1) * 25) + "%";
+        bar.style.backgroundColor = colors[index];
+        text.innerText = labels[index];
+        text.style.color = colors[index];
+    }
+</script>
+
+<style>
+    @keyframes coreFloat {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-5px); }
+    }
+</style>
+{% endblock %}

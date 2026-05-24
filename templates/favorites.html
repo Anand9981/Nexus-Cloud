@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="space-y-12">
+    
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 dark:border-slate-800 pb-8 space-y-2 sm:space-y-0">
+        <div class="space-y-2">
+            <h1 class="text-3xl font-sans font-extrabold tracking-tight text-slate-900 dark:text-white uppercase leading-none" style="font-family: 'Plus Jakarta Sans', sans-serif;">
+                My Favorites
+            </h1>
+            <p class="text-slate-400 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
+                My personal collection of favorites. View, manage, and download all the assets I love in one place.
+            </p>
+        </div>
+        <div class="bg-rose-50 dark:bg-rose-900/20 px-4 py-2 rounded-xl border border-rose-100 dark:border-rose-800 flex items-center gap-2 shrink-0 shadow-sm select-none">
+            <span class="text-rose-500 text-xs animate-pulse">❤️</span>
+            <span class="text-[9px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-wider">{{ images|length }} Favorites Saved</span>
+        </div>
+    </div>
+
+    {% if images %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pb-10">
+        {% for img in images %}
+        <div id="card-{{ img._id }}" class="bg-white dark:bg-[#1E293B] rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden group hover:shadow-md transition-all duration-300 flex flex-col relative">
+            
+            <div class="absolute top-1.5 right-1.5 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur shadow-sm p-0.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-[9px]" onclick="event.stopPropagation();">⋮</div>
+
+            <div class="aspect-square w-full max-h-[190px] overflow-hidden bg-slate-100 dark:bg-slate-900 relative flex-shrink-0 border-b border-slate-50 dark:border-slate-800/20">
+                <img src="{{ img.url }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 select-none" alt="{{ img.filename }}">
+            </div>
+
+            <div class="p-2 space-y-1 flex-1 flex flex-col justify-between bg-white dark:bg-[#1E293B]">
+                
+                <div class="flex items-center justify-between gap-1 pb-0.5">
+                    <div class="flex items-center gap-1 min-w-0">
+                        <span class="text-[8px] select-none">📁</span>
+                        <p class="text-[7.5px] font-black text-slate-400 uppercase tracking-wider truncate">
+                            ROOM: <span class="text-slate-500 dark:text-slate-400">{{ img.folder_name or 'General' }}</span>
+                        </p>
+                    </div>
+
+                    <a href="/user/{{ img.uploader }}" class="flex items-center gap-0.5 shrink-0 bg-slate-50 dark:bg-slate-900/40 px-1 py-px rounded border border-slate-100 dark:border-slate-800/40 hover:border-nexus transition-all group/userlink">
+                        <img src="/static/images/avatars/ai-avatar-1.png" 
+                             class="w-2.5 h-2.5 rounded object-cover" 
+                             onerror="this.src='https://ui-avatars.com/api/?name={{ img.uploader }}&background=2563eb&color=fff';">
+                        <span class="text-[7px] font-black text-nexus uppercase tracking-tight truncate max-w-[45px] group-hover/userlink:underline">
+                            {{ img.uploader }}
+                        </span>
+                    </a>
+                </div>
+
+                <div class="grid grid-cols-4 gap-px bg-slate-50/70 dark:bg-slate-900/50 p-0.5 rounded-lg border border-slate-100 dark:border-slate-800 text-center shadow-inner my-px">
+                    <div class="flex flex-col items-center justify-center text-center cursor-pointer group/like py-0.5" onclick="toggleFavorite('{{ img._id }}')">
+                        <span class="text-[8px] group-hover/like:scale-110 transition-transform select-none">❤️</span>
+                        <span class="text-[7.5px] font-black text-rose-500 mt-px leading-none">Liked</span>
+                    </div>
+                    
+                    <div class="flex flex-col items-center justify-center text-center cursor-pointer group/view py-0.5" onclick="openFavoritesLightbox('{{ img.url }}', '{{ img._id }}')">
+                        <span class="text-[8px] group-hover/view:scale-110 transition-transform select-none">👁️</span>
+                        <span id="views-{{ img._id }}" class="text-[7.5px] font-black text-slate-600 dark:text-slate-400 mt-px leading-none">{{ img.views or 0 }}</span>
+                    </div>
+                    
+                    <div class="flex flex-col items-center justify-center text-center cursor-pointer group/share py-0.5" onclick="sharePhoto('{{ img.url }}', '{{ img._id }}')">
+                        <span class="text-[8px] group-hover/share:scale-110 transition-transform select-none">🔗</span>
+                        <span id="shares-{{ img._id }}" class="text-[7.5px] font-black text-slate-600 dark:text-slate-400 mt-px leading-none">{{ img.shares or 0 }}</span>
+                    </div>
+                    <a href="/download-image/{{ img._id }}" class="flex flex-col items-center justify-center text-center group/down block py-0.5 decoration-none">
+                        <span class="text-[8px] group-hover/down:scale-110 transition-transform select-none">📥</span>
+                        <span class="text-[7.5px] font-black text-slate-600 dark:text-slate-400 mt-px leading-none">{{ img.downloads or 0 }}</span>
+                    </a>
+                </div>
+
+                <div class="flex flex-wrap gap-0.5 pt-px overflow-hidden truncate whitespace-nowrap">
+                    {% if img.tags %}
+                        {% for tag in img.tags[:3] %}
+                            <span class="text-[9px] font-black text-nexus bg-blue-50/40 dark:bg-blue-950/20 border border-blue-100/20 dark:border-blue-900/20 px-1 py-px rounded uppercase tracking-tight">
+                                #{{ tag }}
+                            </span>
+                        {% endfor %}
+                    {% else %}
+                        <span class="text-[9px] font-black text-slate-300 uppercase tracking-tight">#UNTAGGED</span>
+                    {% endif %}
+                </div>
+
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="flex flex-col items-center justify-center py-32 text-center bg-white dark:bg-[#1E293B] border border-slate-100 dark:border-slate-800 rounded-3xl p-8 shadow-inner select-none">
+        <div class="w-16 h-16 bg-rose-50 dark:bg-rose-900/20 rounded-2xl flex items-center justify-center text-3xl mb-6 shadow-inner animate-bounce">💝</div>
+        <h3 class="text-xs font-black uppercase tracking-widest dark:text-white leading-none">Your heart is empty</h3>
+        <p class="text-slate-400 dark:text-slate-500 text-[11px] font-bold uppercase tracking-wide mt-2 max-w-[280px] leading-relaxed">You haven't marked any assets as favorites. Head back to the gallery to curate your collection.</p>
+        <a href="/" class="mt-6 inline-flex items-center bg-nexus text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-wide shadow-md shadow-blue-500/10 hover:scale-105 transition-all">
+            Explore Intelligence ➔
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<div id="favorites-lightbox-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md hidden z-[999] flex items-center justify-center p-4 animate-fadeIn" onclick="closeFavoritesLightbox()">
+    <div class="relative max-w-4xl max-h-[85vh] flex items-center justify-center" onclick="event.stopPropagation()">
+        <button onclick="closeFavoritesLightbox()" class="absolute -top-12 right-0 text-white bg-white/10 hover:bg-white/20 w-10 h-10 rounded-full font-black text-sm transition-all cursor-pointer">✕</button>
+        <img id="favorites-lightbox-image-target" src="" class="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl border border-white/10 select-none">
+    </div>
+</div>
+
+<script>
+    async function toggleFavorite(id) {
+        const res = await fetch(`/like-image/${id}`, { method: 'POST' });
+        if (res.ok) {
+            const card = document.getElementById(`card-${id}`);
+            if (card) {
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.9)';
+                setTimeout(() => {
+                    card.remove();
+                    if (document.querySelectorAll('[id^="card-"]').length === 0) {
+                        location.reload(); 
+                    }
+                }, 300);
+            }
+        }
+    }
+
+    function sharePhoto(url, id) {
+        navigator.clipboard.writeText(url).then(() => {
+            fetch('/share-image/' + id, { method: 'POST' });
+            const sc = document.getElementById('shares-' + id);
+            if (sc) sc.innerText = parseInt(sc.innerText) + 1;
+            alert("Nexus Cloud: Public collection link copied to clipboard!");
+        });
+    }
+
+    // 🔥 HIGH-BLUR OVERLAY VIEWER CONTROLLER REGISTRY
+    function openFavoritesLightbox(imageUrl, imgId) {
+        document.getElementById('favorites-lightbox-image-target').src = imageUrl;
+        document.getElementById('favorites-lightbox-modal').classList.remove('hidden');
+        
+        fetch(`/increment-view/${imgId}`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') {
+                const viewElement = document.getElementById(`views-${imgId}`);
+                if(viewElement) viewElement.innerText = data.new_views;
+            }
+        }).catch(err => console.log("View metric tracking drop:", err));
+    }
+
+    function closeFavoritesLightbox() {
+        document.getElementById('favorites-lightbox-modal').classList.add('hidden');
+        document.getElementById('favorites-lightbox-image-target').src = "";
+    }
+</script>
+
+<style>
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+    .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; }
+</style>
+{% endblock %}
