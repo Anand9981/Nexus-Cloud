@@ -39,7 +39,6 @@ Pyrebase4==4.9.0
 python-dateutil==2.9.0.post0
 python-jwt==4.1.0
 pytz==2025.2
-pywin32==311
 PyYAML==6.0.3
 qrcode==8.2
 regex==2025.11.3
