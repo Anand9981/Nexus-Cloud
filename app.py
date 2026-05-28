@@ -766,13 +766,6 @@ def secure_reset():
 # COMPREHENSIVE USER CONFIGURATION (SETTINGS SYSTEM)
 # ---------------------------------------------------
 
-@app.route('/settings', methods=['GET'])
-@login_required
-def settings():
-    user_data = users_collection.find_one({"_id": ObjectId(current_user.id)})
-    blocked_tags = user_data.get('blocked_tags', []) if user_data else []
-    return render_template('settings.html', blocked_tags=blocked_tags)
-
 @app.route('/update-settings', methods=['POST'])
 @login_required
 def update_settings():
@@ -954,19 +947,24 @@ def login():
         
         user_data = users_collection.find_one({"username": input_username})
         
+        # 🛡️ CASE 1: UNIVERSAL IDENTITY INVALID
         if not user_data:
-            return render_template('401.html', text_override="..."), 401
+            return render_template('401.html', text_override="Requested profile ID is invalid. Please verify your identity name and try again."), 401
             
+        # 🛡️ CASE 2: IDENTITY IS VALID BUT PASSWORD SIGNATURE REJECTED
         if not check_password_hash(user_data['password'], input_password):
-            return jsonify({'status': 'password_error', 'message': 'Incorrect password.'})
+            return jsonify({
+                'status': 'password_error', 
+                'message': 'Incorrect password signature. Please try again.'
+            })
             
-        # 🟢 SUCCESSFUL LOGIN LOGIC
+        # 🟢 CASE 3: ALL SIGNATURES REGISTERED SUCCESSFULLY
         login_user(User(user_data))
         
-        # 1. Generate Session Token
+        # 1. Generate Session Token for device tracking
         session_token = str(uuid.uuid4())
         
-        # 2. Store in Database
+        # 2. Store in Database session nodes
         session_data = {
             "user_id": user_data['_id'],
             "session_token": session_token,
@@ -976,30 +974,31 @@ def login():
         }
         db.sessions.insert_one(session_data)
         
-        # 3. Return success with the token so the frontend can set the cookie
+        # 3. Construct Nexus Authenticated Response
         response = jsonify({
             'status': 'success', 
             'redirect_url': url_for('index'),
-            'session_token': session_token # Frontend will set this as a cookie
+            'message': 'Master security authorization data metrics synchronized successfully.'
         })
         
-        # Optionally set the cookie here if the redirect works, 
-        # but since you use AJAX, frontend setting is more reliable
-        response.set_cookie('nexus_session_token', session_token, httponly=True)
+        # Set the tracking token in a secure HttpOnly cookie
+        response.set_cookie('nexus_session_token', session_token, httponly=True, secure=True)
         
         return response
         
     return render_template('login.html')
 
-@app.route('/revoke-session/<session_id>', methods=['POST'])
+@app.route('/settings', methods=['GET'])
 @login_required
-def revoke_session(session_id):
-    # Ensure the user can only delete their own sessions
-    db.sessions.delete_one({
-        "_id": ObjectId(session_id), 
-        "user_id": ObjectId(current_user.id)
-    })
-    return jsonify({'status': 'success'})
+def settings():
+    user_data = users_collection.find_one({"_id": ObjectId(current_user.id)})
+    # Fetch all sessions for this user
+    user_sessions = list(db.sessions.find({"user_id": ObjectId(current_user.id)}))
+    
+    return render_template('settings.html', 
+                           blocked_tags=user_data.get('blocked_tags', []),
+                           user_sessions=user_sessions,
+                           current_token=request.cookies.get('nexus_session_token'))
 
 @app.before_request
 def update_last_active():
