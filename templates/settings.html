@@ -61,7 +61,6 @@
             </div>
 
             <button type="submit" id="sync-identity-btn-submit" 
-                    onclick="setLoading(this, 'Syncing...')"
                     class="bg-nexus text-white px-10 py-4 rounded-2xl font-black text-xs shadow-xl shadow-blue-500/20 hover:scale-[1.03] transition-all cursor-pointer">
                 Sync Profile Identity
             </button>
@@ -344,20 +343,51 @@ async function cancelAccountDeletion() {
         });
     });
 
-    // Form Handlers
-    document.getElementById('identity-form')?.addEventListener('submit', function(e) {
-        e.preventDefault();
-        let finalAvatarValue = customImageBase64Payload || document.querySelector('input[name="selected_avatar"]:checked')?.value;
-        if (!finalAvatarValue) { alert('Select an avatar first.'); return; }
-        
-        fetch('/synchronize-identity', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ selected_avatar: finalAvatarValue }) })
-        .then(res => res.json()).then(data => {
-            if(data.status === 'success') {
-                triggerSettingsToast('success', 'Profile Updated.');
-                setTimeout(() => window.location.reload(), 1500);
-            } else { triggerSettingsToast('error', data.message); }
+// REPLACE your current identity-form listener with this:
+document.getElementById('identity-form').addEventListener('submit', async function(e) {
+    e.preventDefault(); // Stop the page from reloading
+    
+    const btn = document.getElementById('sync-identity-btn-submit');
+    const originalText = btn.innerText;
+    
+    // Set loading state
+    btn.disabled = true;
+    btn.innerText = "Syncing...";
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+
+    let finalAvatarValue = customImageBase64Payload || document.querySelector('input[name="selected_avatar"]:checked')?.value;
+    
+    if (!finalAvatarValue) {
+        alert('Select an avatar first.');
+        btn.disabled = false;
+        btn.innerText = originalText;
+        return;
+    }
+
+    try {
+        const response = await fetch('/synchronize-identity', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ selected_avatar: finalAvatarValue })
         });
-    });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            triggerSettingsToast('success', 'Profile Updated.');
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            triggerSettingsToast('error', data.message || "Update failed.");
+            btn.disabled = false;
+            btn.innerText = originalText;
+        }
+    } catch (err) {
+        console.error("Fetch Error:", err);
+        triggerSettingsToast('error', 'Connection failed.');
+        btn.disabled = false;
+        btn.innerText = originalText;
+    }
+});
 
     // Utility functions (Toast, Password Toggle, etc.)
     function previewSelectedAvatar(url) { document.getElementById('current-avatar-preview').src = url; customImageBase64Payload = null; }
@@ -380,14 +410,48 @@ async function cancelAccountDeletion() {
         setTimeout(() => { c.classList.add('translate-y-[-20px]'); setTimeout(() => c.classList.add('hidden'), 300); }, 3000);
     }
 
-    document.getElementById('internal-change-password-form')?.addEventListener('submit', function(e) {
+document.getElementById('internal-change-password-form').addEventListener('submit', async function(e) {
         e.preventDefault();
+        
+        // Get the form and the specific button inside it
+        const form = e.target;
+        const btn = form.querySelector('button[type="submit"]');
+        const originalText = btn.innerHTML; // Keep the icon + text
+        
+        // UI Loading State (using your existing setLoading function or manual)
+        btn.disabled = true;
+        btn.innerHTML = '🛡️ Updating...';
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+    
         const fd = new FormData(); 
         fd.append('current_password', document.getElementById('settings-current-password').value); 
         fd.append('new_password', document.getElementById('settings-new-password').value);
-        fetch('/internal-change-password', { method: 'POST', body: fd }).then(res => res.json()).then(data => {
-            if(data.status === 'success') triggerSettingsToast('success', 'Key Updated.'); else triggerSettingsToast('error', data.message);
-        });
+    
+        try {
+            const response = await fetch('/internal-change-password', { 
+                method: 'POST', 
+                body: fd 
+            });
+            
+            const data = await response.json();
+    
+            if (data.status === 'success') {
+                triggerSettingsToast('success', 'Access Key Updated Successfully.');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                triggerSettingsToast('error', data.message || "Update failed.");
+                // Reset button
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        } catch (err) {
+            console.error("Critical Failure:", err);
+            triggerSettingsToast('error', 'Network failure.');
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
     });
 
     // Loading States के लिए फंक्शन

@@ -843,31 +843,26 @@ def update_profile():
 @login_required
 def synchronize_identity():
     try:
-        data = request.get_json() or {}
+        data = request.get_json()
         selected_avatar = data.get('selected_avatar')
-
+        
         if not selected_avatar:
-            return jsonify({'status': 'error', 'message': 'No avatar selection received.'}), 400
+            return jsonify({'status': 'error', 'message': 'No avatar selected.'}), 400
 
         users_collection.update_one(
             {'_id': ObjectId(current_user.id)},
             {'$set': {'profile_pic': selected_avatar}}
         )
         
+        # Session aur current_user ko update karna zaroori hai taki UI turant refresh ho
         current_user.profile_pic = selected_avatar
-        
         session['profile_pic'] = selected_avatar
         session.modified = True
         
-        return jsonify({
-            'status': 'success', 
-            'message': 'Profile Photo Successfully Updated..',
-            'new_avatar_path': selected_avatar
-        })
-        
+        return jsonify({'status': 'success', 'message': 'Profile Updated'})
     except Exception as e:
-        print(f"Server dynamic registry avatar update fault: {str(e)}")
-        return jsonify({'status': 'error', 'message': f'Server registry fault: {str(e)}'}), 500
+        print(f"DEBUG ERROR: {str(e)}") # Critical for finding the break
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/get-available-avatars', methods=['GET'])
 @login_required
