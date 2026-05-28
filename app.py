@@ -1,5 +1,6 @@
 import os
 import re
+import uuid
 import boto3
 import smtplib
 import random
@@ -7,6 +8,7 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, f
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from datetime import datetime, timedelta
+from flask import make_response, redirect, url_for
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
@@ -952,25 +954,62 @@ def login():
         
         user_data = users_collection.find_one({"username": input_username})
         
-        # 🛡️ CASE 1: UNIVERSAL IDENTITY INVALID (Username database me missing hai -> Direct 401 Render Page)
         if not user_data:
-            return render_template('401.html', text_override="Requested profile ID is invalid. Please verify your identity name and try again."), 401
+            return render_template('401.html', text_override="..."), 401
             
-        # 🛡️ CASE 2: IDENTITY IS VALID BUT PASSWORD SIGNATURE REJECTED
         if not check_password_hash(user_data['password'], input_password):
-            return jsonify({
-                'status': 'password_error', 
-                'message': 'Incorrect password. Please try again.'
-            })
+            return jsonify({'status': 'password_error', 'message': 'Incorrect password.'})
             
-        # 🟢 CASE 3: ALL SIGNATURES REGISTERED SUCCESSFULLY
+        # 🟢 SUCCESSFUL LOGIN LOGIC
         login_user(User(user_data))
-        return jsonify({
+        
+        # 1. Generate Session Token
+        session_token = str(uuid.uuid4())
+        
+        # 2. Store in Database
+        session_data = {
+            "user_id": user_data['_id'],
+            "session_token": session_token,
+            "device_info": request.user_agent.string,
+            "ip_address": request.remote_addr,
+            "last_active": datetime.utcnow()
+        }
+        db.sessions.insert_one(session_data)
+        
+        # 3. Return success with the token so the frontend can set the cookie
+        response = jsonify({
             'status': 'success', 
-            'redirect_url': url_for('index')
+            'redirect_url': url_for('index'),
+            'session_token': session_token # Frontend will set this as a cookie
         })
         
+        # Optionally set the cookie here if the redirect works, 
+        # but since you use AJAX, frontend setting is more reliable
+        response.set_cookie('nexus_session_token', session_token, httponly=True)
+        
+        return response
+        
     return render_template('login.html')
+
+@app.route('/revoke-session/<session_id>', methods=['POST'])
+@login_required
+def revoke_session(session_id):
+    # Ensure the user can only delete their own sessions
+    db.sessions.delete_one({
+        "_id": ObjectId(session_id), 
+        "user_id": ObjectId(current_user.id)
+    })
+    return jsonify({'status': 'success'})
+
+@app.before_request
+def update_last_active():
+    if current_user.is_authenticated:
+        token = request.cookies.get('nexus_session_token')
+        if token:
+            db.sessions.update_one(
+                {"session_token": token},
+                {"$set": {"last_active": datetime.utcnow()}}
+            )
 
 @app.route('/logout')
 @login_required
