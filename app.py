@@ -163,7 +163,6 @@ def index():
         else:
             user_folders = []
         
-        # Trending tags की पाइपलाइन
         trending = list(images_collection.aggregate([
             {"$match": query}, 
             {"$unwind": "$tags"}, 
@@ -172,11 +171,9 @@ def index():
             {"$limit": 8}
         ]))
         
-        # सभी इमेजेस की पाइपलाइन (यहाँ 300 की लिमिट जोड़ दी गई है)
         pipeline = [
             {"$match": query},
             {"$sort": {"uploaded_at": -1}},
-            {"$limit": 300}, 
             {
                 "$lookup": {
                     "from": "accounts",
