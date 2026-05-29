@@ -1,9 +1,11 @@
 import os
 import re
+from urllib import response
 import uuid
 import boto3
 import smtplib
 import random
+from user_agents import parse 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
 from dotenv import load_dotenv
 from pymongo import MongoClient
@@ -965,6 +967,9 @@ def login():
         session_token = str(uuid.uuid4())
         
         # 2. Store in Database session nodes
+        ua = parse(request.user_agent.string)
+        device_info = f"{ua.browser.family} on {ua.os.family}" # Result: "Chrome on Windows 11"
+        
         session_data = {
             "user_id": user_data['_id'],
             "session_token": session_token,
@@ -981,8 +986,8 @@ def login():
             'message': 'Master security authorization data metrics synchronized successfully.'
         })
         
-        # Set the tracking token in a secure HttpOnly cookie
-        response.set_cookie('nexus_session_token', session_token, httponly=True, secure=True)
+        # login route में यहाँ बदलाव करें:
+        response.set_cookie('nexus_session_token', session_token, httponly=True, secure=False)
         
         return response
         
@@ -1018,9 +1023,9 @@ def logout():
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
-
-
+    # Render पर पोर्ट डायनामिक होता है, इसलिए यह तरीका सबसे बेस्ट है:
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
 
 
 

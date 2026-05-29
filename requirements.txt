@@ -24,3 +24,4 @@ tzdata==2026.2
 tzlocal==5.3.1
 urllib3==2.7.0
 Werkzeug==3.1.8
+user-agents==2.2.0  <-- इसे यहाँ जोड़ें
