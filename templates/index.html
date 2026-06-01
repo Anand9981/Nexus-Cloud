@@ -127,86 +127,88 @@
 
     </div>
 
-    <div id="upload-section" class="bg-white dark:bg-[#1E293B] p-3.5 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm transition-all relative">
-        <div class="flex items-center justify-between mb-2.5">
-            <div class="flex flex-col">
-                <h3 class="text-xs font-black tracking-tight uppercase text-slate-800 dark:text-white leading-none">NEXUS CONSOLE</h3>
-            </div>
-            <button onclick="toggleFolderBox()" class="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg text-nexus font-black text-[9px] hover:scale-105 active:scale-95 transition-all border border-slate-300 dark:border-slate-700 shadow-sm">➕ Create Folder</button>
+    <div id="upload-section" class="bg-white dark:bg-[#1E293B] p-4 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm transition-all relative">
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex flex-col">
+            <h3 class="text-xs font-black tracking-tight uppercase text-slate-800 dark:text-white leading-none">CLOUD SYNCHRONIZER</h3>
+            <p class="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-1">FAST-TRACK DYNAMIC FILE INGESTION MANAGER</p>
         </div>
+        <button onclick="toggleFolderBox()" class="bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-lg text-nexus font-black text-[9px] hover:scale-105 active:scale-95 transition-all border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-1">➕ Create Folder</button>
+    </div>
 
-        <div id="new-folder-box" class="hidden mb-2.5 animate-fadeIn">
-            <div class="flex gap-2">
-                <input type="text" id="new-folder-name" placeholder="Folder Name (e.g. Work, Family)..." class="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-[10px] font-bold focus:ring-1 focus:ring-nexus outline-none">
-                
-                <button onclick="{% if current_user.is_authenticated %}createNewFolderAjax(){% else %}window.location.href='/login'{% endif %}" class="bg-emerald-500 text-white px-3.5 rounded-lg font-black text-[9px] shadow-sm uppercase tracking-wide">Build Folder</button>
-            </div>
-        </div>
-
-        <form id="uploadForm" enctype="multipart/form-data" class="space-y-2.5">
-            <input type="hidden" id="selected-folder-input" name="folder_name" value="General">
-            
-            <div class="grid grid-cols-1 md:grid-cols-12 gap-2.5">
-                <div class="md:col-span-4 flex flex-col bg-slate-100/80 dark:bg-slate-900 p-2 rounded-xl border border-slate-300 dark:border-slate-700 min-h-[115px] max-h-[115px] shadow-inner">
-                    <label class="text-[8px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1 block ml-0.5">Your Folders</label>
-                    
-                    <div class="grid grid-cols-2 gap-1.5 overflow-y-auto custom-scrollbar flex-1 pr-1 auto-rows-max">
-                        <button type="button" id="btn-General" onclick="selectFolder('General')" class="w-full text-center px-1.5 py-2 rounded-lg font-bold text-[9px] border-2 border-nexus bg-nexus text-white shadow-sm transition-all cursor-pointer truncate flex items-center justify-center gap-1">
-                             🏠 General
-                        </button>
-                        
-                        {% for folder in folders %}
-                        <button type="button" id="btn-{{ folder.folder_name }}" onclick="selectFolder('{{ folder.folder_name }}')" class="w-full text-center px-1.5 py-2 rounded-lg font-bold text-[9px] border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all cursor-pointer hover:border-nexus truncate flex items-center justify-center gap-1 shadow-sm">
-                             📁 {{ folder.folder_name }}
-                        </button>
-                        {% endfor %}
-                    </div>
-                </div>
-
-                <div class="md:col-span-8 flex flex-col">
-                    <div class="relative flex-1 border-2 border-dashed border-slate-400 dark:border-slate-600 rounded-xl p-2 text-center hover:border-nexus transition-all bg-slate-100/50 dark:bg-slate-900 flex flex-col justify-center items-center min-h-[115px] max-h-[115px] shadow-inner">
-                        <input type="file" id="imageInput" name="image" accept="image/*" multiple required onchange="handleFiles(this.files)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
-                        
-                        <div id="drop-zone-content" class="py-0.5">
-                            <div class="text-lg mb-0.5 filter drop-shadow">☁️</div>
-                            <p class="text-[12.5px] font-black text-slate-700 dark:text-slate-300">Drag & Drop or Click to Select</p>
-                            <p class="text-[9.5px] font-medium text-slate-400 mt-0.5">Supports PNG, JPG assets up to 10MB</p>
-                        </div>
-
-                        <div id="file-list" class="hidden w-full text-left">
-                            <p class="text-[8px] font-black text-nexus uppercase tracking-widest mb-1">Attached Assets:</p>
-                            <div id="file-items-container" class="max-h-14 overflow-y-auto space-y-1 custom-scrollbar pr-1"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 items-end pt-px">
-                <div class="space-y-0.5">
-                    <label class="text-[8px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-0.5 block">Manual Tags (Optional)</label>
-                    <input type="text" name="manual_tags" placeholder="e.g. Summer, Trip, Nexus" class="w-full p-2 rounded-lg bg-slate-100/90 dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 border border-slate-300 dark:border-slate-700 outline-none focus:ring-1 focus:ring-nexus font-bold text-[9px] shadow-inner">
-                </div>
-                
-                <button type="submit" id="btnText" class="w-full bg-nexus text-white py-2 rounded-lg font-black shadow-md shadow-blue-500/10 hover:scale-[1.01] active:scale-95 transition-all flex justify-center items-center gap-1.5 text-[12px] uppercase tracking-wider cursor-pointer h-[42px]">
-                    <span id="spinner" class="hidden animate-spin text-[9px]">🌀</span>
-                    <span id="btnLabel">Start Cloud Upload</span>
-                </button>
-            </div>
-        </form>
-        
-        <div id="status" class="hidden mt-2 p-2 rounded-xl text-[9px] font-bold border animate-fadeIn"></div>
-        
-        <div id="preview-section" class="hidden mt-2.5 pt-2.5 border-t border-slate-200 dark:border-slate-800 relative animate-fadeIn">
-            <div class="flex items-center justify-between mb-1.5 pr-6">
-                <h4 class="text-[7.5px] font-black text-slate-400 uppercase">Latest Upload Preview Matrix</h4>
-                
-                <button type="button" onclick="closeExtendedPreviewTray()" class="absolute top-2 right-2 text-slate-400 hover:text-rose-500 bg-slate-100 dark:bg-slate-800 w-5 h-5 rounded-md flex items-center justify-center font-black text-[9px] transition-all cursor-pointer shadow-sm border border-slate-200 dark:border-slate-700">✕</button>
-            </div>
-            
-            <div id="preview-grid-container" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
-                </div>
+    <div id="new-folder-box" class="hidden mb-3 animate-fadeIn">
+        <div class="flex gap-2">
+            <input type="text" id="new-folder-name" placeholder="Folder Name (e.g. Work, Family)..." class="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-[10px] font-bold focus:ring-1 focus:ring-nexus outline-none">
+            <button onclick="{% if current_user.is_authenticated %}createNewFolderAjax(){% else %}window.location.href='/login'{% endif %}" class="bg-emerald-500 text-white px-3.5 rounded-lg font-black text-[9px] shadow-sm uppercase tracking-wide">Build Folder</button>
         </div>
     </div>
+
+    <form id="uploadForm" enctype="multipart/form-data" class="space-y-3">
+        <input type="hidden" id="selected-folder-input" name="folder_name" value="General">
+        
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+            <div class="md:col-span-4 flex flex-col bg-slate-50/50 dark:bg-slate-900/50 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 min-h-[130px] max-h-[130px] shadow-sm">
+                <label class="text-[8px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 block ml-1">TARGET DIRECTORY</label>
+                
+                <div class="grid grid-cols-2 gap-2 overflow-y-auto custom-scrollbar flex-1 pr-1 auto-rows-max">
+                    <button type="button" data-folder="General" onclick="selectFolder('General')" class="folder-btn w-full text-center px-2 py-2.5 rounded-xl font-bold text-[10px] border-2 transition-all cursor-pointer truncate flex items-center justify-center gap-1.5 shadow-sm border-nexus bg-nexus text-white shadow-blue-500/20">
+                        🏠 General
+                    </button>
+                    
+                    {% if current_user.is_authenticated %}
+                        {% for folder in folders %}
+                        <button type="button" data-folder="{{ folder.folder_name }}" onclick="selectFolder('{{ folder.folder_name|replace("'", "\\'") }}')" class="folder-btn w-full text-center px-2 py-2.5 rounded-xl font-bold text-[10px] border-2 transition-all cursor-pointer truncate flex items-center justify-center gap-1.5 shadow-sm border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-nexus">
+                            📁 {{ folder.folder_name }}
+                        </button>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="md:col-span-8 flex flex-col">
+                <div class="relative flex-1 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-2xl p-2 text-center hover:border-nexus transition-all bg-slate-50/30 dark:bg-slate-900/30 flex flex-col justify-center items-center min-h-[130px] max-h-[130px] shadow-sm">
+                    <input type="file" id="imageInput" name="image" accept="image/*" multiple required onchange="handleFiles(this.files)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                    
+                    <div id="drop-zone-content" class="py-1">
+                        <div class="text-xl mb-1 filter drop-shadow">☁️</div>
+                        <p class="text-[12.5px] font-black text-slate-700 dark:text-slate-300">Drag & Drop or Click to Select</p>
+                        <p class="text-[9.5px] font-medium text-slate-400 mt-0.5">Supports PNG, JPG assets up to 10MB</p>
+                    </div>
+
+                    <div id="file-list" class="hidden w-full text-left">
+                        <p class="text-[8px] font-black text-nexus uppercase tracking-widest mb-1">Attached Assets:</p>
+                        <div id="file-items-container" class="max-h-16 overflow-y-auto space-y-1 custom-scrollbar pr-1"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-1">
+            <label class="text-[8px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1 block">Manual Tags (Optional)</label>
+            <div class="flex flex-col sm:flex-row gap-3">
+                <input type="text" name="manual_tags" placeholder="e.g. Summer, Trip, Nexus" class="flex-1 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 border border-slate-200 dark:border-slate-700 outline-none focus:ring-1 focus:ring-nexus font-bold text-[10px] shadow-sm">
+                
+                <button type="submit" id="btnText" class="w-full sm:w-auto sm:min-w-[200px] bg-nexus text-white py-3.5 px-6 rounded-xl font-black shadow-lg shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all flex justify-center items-center gap-2 text-[11px] uppercase tracking-wider cursor-pointer">
+                    <span id="spinner" class="hidden animate-spin text-[11px]">🌀</span>
+                    <span id="btnLabel">UPLOAD TO GENERAL</span>
+                </button>
+            </div>
+        </div>
+    </form>
+    
+    <div id="status" class="hidden mt-2 p-2 rounded-xl text-[9px] font-bold border animate-fadeIn"></div>
+    
+    <div id="preview-section" class="hidden mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 relative animate-fadeIn">
+        <div class="flex items-center justify-between mb-2 pr-6">
+            <h4 class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Latest Upload Preview Matrix</h4>
+            
+            <button type="button" onclick="closeExtendedPreviewTray()" class="absolute top-2 right-2 text-slate-400 hover:text-rose-500 bg-slate-50 dark:bg-slate-800 w-5 h-5 rounded-md flex items-center justify-center font-black text-[9px] transition-all cursor-pointer shadow-sm border border-slate-200 dark:border-slate-700">✕</button>
+        </div>
+        
+        <div id="preview-grid-container" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
+        </div>
+    </div>
+</div>
 
     <div id="gallery-section" class="scroll-mt-24 border-t border-dashed border-slate-200 dark:border-slate-800 my-6"></div>
 
@@ -220,11 +222,15 @@
             </form>
         </div>
 
-        <div class="flex flex-wrap gap-2.5">
+        <div class="flex flex-wrap gap-2.5 items-center">
             <span class="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mr-2 self-center">Trending:</span>
             {% for tag in trending_tags %}
-            <a href="/?q={{ tag._id }}#gallery-section" class="bg-white dark:bg-slate-800 px-4 py-2 rounded-xl text-[10px] font-black text-slate-500 hover:bg-nexus hover:text-white transition-all border border-slate-100 dark:border-slate-700 shadow-sm">
-                #{{ tag._id }}
+            <a href="/?q={{ tag._id }}#gallery-section" 
+               class="bg-white dark:bg-slate-800 px-4 py-2 rounded-xl text-[10px] font-black text-slate-500 hover:bg-nexus hover:text-white transition-all border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-1">
+                <span>#{{ tag._id }}</span>
+                {% if tag.count and tag.count > 1 %}
+                <span class="text-[8px] bg-blue-100 dark:bg-blue-900/30 text-nexus px-1 rounded font-black">{{ tag.count }}</span>
+                {% endif %}
             </a>
             {% endfor %}
         </div>
@@ -237,13 +243,13 @@
         {% endif %}
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pb-8">
+    <div id="gallery-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pb-8">
         {% for img in images %}
         <div class="bg-white dark:bg-[#1E293B] rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden group hover:shadow-md transition-all duration-300 flex flex-col relative">
             
-            <div class="absolute top-1.5 left-1.5 z-20 bg-white/80 dark:bg-slate-900/80 p-0.5 rounded-lg opacity-0 group-hover:opacity-100 checked:opacity-100 transition-opacity backdrop-blur-sm">
+            <!-- <div class="absolute top-1.5 left-1.5 z-20 bg-white/80 dark:bg-slate-900/80 p-0.5 rounded-lg opacity-0 group-hover:opacity-100 checked:opacity-100 transition-opacity backdrop-blur-sm">
                 <input type="checkbox" name="asset_ids_to_trash" value="{{ img._id }}" class="asset-folder-checkbox w-3 h-3 rounded text-nexus focus:ring-nexus border-slate-300 cursor-pointer" onchange="evaluateFolderSelectAllState()">
-            </div>
+            </div> -->
 
             <div class="absolute top-1.5 right-1.5 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur shadow-sm p-0.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-[9px]" onclick="event.stopPropagation();">⋮</div>
 
@@ -308,6 +314,11 @@
     </div>
 </div>
 
+<!-- <div id="loading-indicator" class="hidden text-center py-4">
+        <span class="inline-block animate-spin text-xl">🌀</span>
+        <p class="text-[10px] font-black text-slate-400 mt-2 uppercase tracking-widest">Fetching more memories...</p>
+</div> -->
+
 <div id="lightbox-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md hidden z-[999] flex items-center justify-center p-4 animate-fadeIn" onclick="closeImageLightbox()">
     <div class="relative max-w-4xl max-h-[85vh] flex items-center justify-center" onclick="event.stopPropagation()">
         <button onclick="closeImageLightbox()" class="absolute -top-12 right-0 text-white bg-white/10 hover:bg-white/20 w-10 h-10 rounded-full font-black text-sm transition-all">✕</button>
@@ -319,16 +330,42 @@
     let autoPreviewDismissTimer = null;
 
     function selectFolder(name) {
-        document.querySelectorAll('[id^="btn-"]').forEach(b => {
-            b.className = "w-full text-center px-1.5 py-2 rounded-lg font-bold text-[9px] border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all cursor-pointer hover:border-nexus truncate flex items-center justify-center gap-1 shadow-sm";
+        // 1. Sabhi folder buttons ko default (inactive) design me reset karo
+        document.querySelectorAll('.folder-btn').forEach(b => {
+            b.classList.remove('border-nexus', 'bg-nexus', 'text-white', 'shadow-blue-500/20');
+            b.classList.add('border-slate-200', 'dark:border-slate-700', 'bg-white', 'dark:bg-slate-800', 'text-slate-700', 'dark:text-slate-300');
         });
-        const active = document.getElementById('btn-' + name);
+        
+        // 2. Jo folder select hua hai, usko securely data-folder attribute se dhoondho
+        const active = document.querySelector(`.folder-btn[data-folder="${CSS.escape(name)}"]`);
         if(active) {
-            active.className = "w-full text-center px-1.5 py-2 rounded-lg font-bold text-[9px] border-2 border-nexus bg-nexus text-white shadow-md shadow-blue-500/10 transition-all cursor-pointer truncate flex items-center justify-center gap-1";
+            // Active design (blue) apply karo
+            active.classList.remove('border-slate-200', 'dark:border-slate-700', 'bg-white', 'dark:bg-slate-800', 'text-slate-700', 'dark:text-slate-300');
+            active.classList.add('border-nexus', 'bg-nexus', 'text-white', 'shadow-blue-500/20');
         }
+        
+        // 3. Hidden input aur Upload button ka text update karo
         document.getElementById('selected-folder-input').value = name;
-        document.getElementById('btnLabel').innerText = "Upload to " + name;
+        document.getElementById('btnLabel').innerText = "UPLOAD TO " + name.toUpperCase();
     }
+  
+    // function selectFolder(name) {
+    //     // 1. फोल्डर के नाम में मौजूद स्पेस को डैश (-) से रिप्लेस करना 
+    //     const safeId = name.replace(/\s+/g, '-');
+    //     // 2. सभी फोल्डर बटन्स को उनके डिफ़ॉल्ट (इनएक्टिव) डिज़ाइन में सेट करना
+    //     document.querySelectorAll('[id^="btn-"]').forEach(b => {
+    //         b.className = "w-full text-center px-1.5 py-2 rounded-lg font-bold text-[9px] border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all cursor-pointer hover:border-nexus truncate flex items-center justify-center gap-1 shadow-sm";
+    //     });
+    //     // 3. जो फोल्डर सेलेक्ट हुआ है, उसे एक्टिव (नीला) डिज़ाइन देना
+    //     const active = document.getElementById('btn-' + safeId);
+    //     if(active) {
+    //         active.className = "w-full text-center px-1.5 py-2 rounded-lg font-bold text-[9px] border-2 border-nexus bg-nexus text-white shadow-md shadow-blue-500/10 transition-all cursor-pointer truncate flex items-center justify-center gap-1";
+    //     }
+    //     // 4. बैकएंड के लिए हिडन इनपुट की वैल्यू अपडेट करना
+    //     document.getElementById('selected-folder-input').value = name;
+    //     // 5. मुख्य अपलोड बटन का टेक्स्ट डायनामिक तरीके से अपडेट करना (Uppercase में)
+    //     document.getElementById('btnLabel').innerText = "UPLOAD TO " + name.toUpperCase();
+    // }
 
     function handleFiles(files) {
         const list = document.getElementById('file-list'), container = document.getElementById('file-items-container'), content = document.getElementById('drop-zone-content');
@@ -386,46 +423,46 @@
         document.getElementById('lightbox-image-target').src = "";
     }
 
-    function toggleAllFolderAssets(masterCheckbox) {
-        const itemCheckboxes = document.querySelectorAll('.asset-folder-checkbox');
-        itemCheckboxes.forEach(cb => cb.checked = masterCheckbox.checked);
-    }
+    // function toggleAllFolderAssets(masterCheckbox) {
+    //     const itemCheckboxes = document.querySelectorAll('.asset-folder-checkbox');
+    //     itemCheckboxes.forEach(cb => cb.checked = masterCheckbox.checked);
+    // }
 
-    function evaluateFolderSelectAllState() {
-        const master = document.getElementById('master-folder-select-all');
-        const items = document.querySelectorAll('.asset-folder-checkbox');
-        const checkedCount = document.querySelectorAll('.asset-folder-checkbox:checked').length;
-        if (master) {
-            master.checked = (items.length === checkedCount && items.length > 0);
-        }
-    }
+    // function evaluateFolderSelectAllState() {
+    //     const master = document.getElementById('master-folder-select-all');
+    //     const items = document.querySelectorAll('.asset-folder-checkbox');
+    //     const checkedCount = document.querySelectorAll('.asset-folder-checkbox:checked').length;
+    //     if (master) {
+    //         master.checked = (items.length === checkedCount && items.length > 0);
+    //     }
+    // }
 
-    async function executeBulkFolderTrash() {
-        const checkedBoxes = document.querySelectorAll('.asset-folder-checkbox:checked');
-        if (checkedBoxes.length === 0) {
-            alert("Please select at least one asset to move to trash.");
-            return;
-        }
-        if (confirm(`Are you sure you want to move these ${checkedBoxes.length} images to Trash?`)) {
-            const assetIds = Array.from(checkedBoxes).map(cb => cb.value);
-            try {
-                const response = await fetch('/bulk-trash-assets', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ asset_ids: assetIds })
-                });
-                const result = await response.json();
-                if (result.status === 'success') {
-                    alert("Assets relocated to Trash Bin successfully.");
-                    location.reload();
-                } else {
-                    alert("Bulk sync failed.");
-                }
-            } catch (err) {
-                alert("Network communication layout error.");
-            }
-        }
-    }
+    // async function executeBulkFolderTrash() {
+    //     const checkedBoxes = document.querySelectorAll('.asset-folder-checkbox:checked');
+    //     if (checkedBoxes.length === 0) {
+    //         alert("Please select at least one asset to move to trash.");
+    //         return;
+    //     }
+    //     if (confirm(`Are you sure you want to move these ${checkedBoxes.length} images to Trash?`)) {
+    //         const assetIds = Array.from(checkedBoxes).map(cb => cb.value);
+    //         try {
+    //             const response = await fetch('/bulk-trash-assets', {
+    //                 method: 'POST',
+    //                 headers: { 'Content-Type': 'application/json' },
+    //                 body: JSON.stringify({ asset_ids: assetIds })
+    //             });
+    //             const result = await response.json();
+    //             if (result.status === 'success') {
+    //                 alert("Assets relocated to Trash Bin successfully.");
+    //                 location.reload();
+    //             } else {
+    //                 alert("Bulk sync failed.");
+    //             }
+    //         } catch (err) {
+    //             alert("Network communication layout error.");
+    //         }
+    //     }
+    // }
 
     function toggleFolderBox() { document.getElementById('new-folder-box').classList.toggle('hidden'); }
     
@@ -519,6 +556,119 @@
             setTimeout(() => { document.getElementById('upload-section').scrollIntoView({ behavior: 'smooth' }); }, 500);
         }
     });
+
+    // ------------------------------------------------------------------
+    // 🔥 FIXED INFINITE SCROLL SCRIPT WTH BEAUTIFUL CARDS
+    // ------------------------------------------------------------------
+    let scrollPage = 1; // page 1 is already handled by jinja render
+    let isFetchingData = false;
+    let imagesAvailable = true;
+    const loader = document.getElementById('loading-indicator');
+    
+    // // Taki search karte waqt bhi scroll sahi endpoint ko call kare
+    // const sParams = new URLSearchParams(window.location.search);
+    // const sQuery = sParams.get('q') || '';
+
+    // window.addEventListener('scroll', () => {
+    //     if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 800) {
+    //         if (!isFetchingData && imagesAvailable) {
+    //             isFetchingData = true;
+    //             if (loader) loader.classList.remove('hidden');
+                
+    //             // Fetch next images
+    //             fetch(`/load-more?page=${scrollPage}&q=${sQuery}`)
+    //                 .then(response => response.json())
+    //                 .then(data => {
+    //                     if (data.length === 0) {
+    //                         imagesAvailable = false; // Aur images nahi bachi DB mein
+    //                         if (loader) loader.classList.add('hidden');
+    //                     } else {
+    //                         const gallery = document.getElementById('gallery-container'); 
+                            
+    //                         data.forEach(img => {
+    //                             // Extract properties safely
+    //                             const imgId = img._id && img._id.$oid ? img._id.$oid : img._id;
+    //                             const folderName = img.folder_name || 'General';
+    //                             const profilePic = img.profile_pic || '/static/images/avatars/default.png';
+    //                             const uploader = img.uploader || 'Unknown';
+    //                             const likes = img.likes || 0;
+    //                             const views = img.views || 0;
+    //                             const shares = img.shares || 0;
+    //                             const downloads = img.downloads || 0;
+
+    //                             // Tags builder
+    //                             let tagsHtml = '';
+    //                             if (img.tags && img.tags.length > 0) {
+    //                                 img.tags.slice(0, 4).forEach(tag => {
+    //                                     tagsHtml += `<span class="text-[9px] font-black text-nexus bg-blue-50/40 dark:bg-blue-950/20 border border-blue-100/20 dark:border-blue-900/20 px-1.5 py-0.5 rounded uppercase tracking-tight">#${tag}</span>`;
+    //                                 });
+    //                             } else {
+    //                                 tagsHtml = `<span class="text-[9px] font-black text-slate-300 uppercase tracking-tight">#UNTAGGED</span>`;
+    //                             }
+
+    //                             // 🔥 PERFECT TAILWIND HTML CARD 🔥
+    //                             const imgHTML = `
+    //                             <div class="bg-white dark:bg-[#1E293B] rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden group hover:shadow-md transition-all duration-300 flex flex-col relative animate-fadeIn">
+    //                                 <div class="absolute top-1.5 right-1.5 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur shadow-sm p-0.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-[9px]" onclick="event.stopPropagation();">⋮</div>
+
+    //                                 <div class="aspect-square w-full max-h-[190px] overflow-hidden bg-slate-100 dark:bg-slate-900 relative flex-shrink-0 border-b border-slate-50 dark:border-slate-800/20">
+    //                                     <img src="${img.url}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="${img.filename}">
+    //                                 </div>
+
+    //                                 <div class="py-1.5 px-2 space-y-1 flex-1 flex flex-col justify-between bg-white dark:bg-[#1E293B]">
+    //                                     <div class="flex items-center justify-between gap-1">
+    //                                         <div class="flex items-center gap-0.5 min-w-0">
+    //                                             <span class="text-[8px]">📁</span>
+    //                                             <p class="text-[7.5px] font-black text-slate-400 uppercase tracking-wider truncate">
+    //                                                 ROOM: <span class="text-slate-500 dark:text-slate-400">${folderName}</span>
+    //                                             </p>
+    //                                         </div>
+    //                                         <a href="/user/${uploader}" class="flex items-center gap-0.5 shrink-0 bg-slate-50 dark:bg-slate-900/40 px-1 py-px rounded border border-slate-100 dark:border-slate-800/40 hover:border-nexus transition-all group/userlink">
+    //                                             <img src="${profilePic}" class="w-2.5 h-2.5 rounded object-cover" onerror="this.src='https://ui-avatars.com/api/?name=${uploader}&background=2563eb&color=fff';">
+    //                                             <span class="text-[7px] font-black text-nexus uppercase tracking-tight truncate max-w-[45px] group-hover/userlink:underline">${uploader}</span>
+    //                                         </a>
+    //                                     </div>
+
+    //                                     <div class="grid grid-cols-4 gap-px bg-slate-100 dark:bg-slate-900 py-0.5 px-1 rounded-xl border border-slate-200 dark:border-slate-800 text-center shadow-inner my-px">
+    //                                         <div class="flex flex-col items-center justify-center text-center cursor-pointer group/like" onclick="likePhoto('${imgId}')">
+    //                                             <span class="text-[8.5px] filter drop-shadow-sm group-hover/like:scale-110 transition-transform">❤️</span>
+    //                                             <span id="likes-${imgId}" class="text-[7.5px] font-black text-slate-700 dark:text-slate-300 leading-none mt-0.5">${likes}</span>
+    //                                         </div>
+    //                                         <div class="flex flex-col items-center justify-center text-center cursor-pointer group/view" onclick="openImageLightbox('${img.url}', '${imgId}')">
+    //                                             <span class="text-[8.5px] filter drop-shadow-sm group-hover/view:scale-110 transition-transform">👁️</span>
+    //                                             <span id="views-${imgId}" class="text-[7.5px] font-black text-slate-700 dark:text-slate-300 leading-none mt-0.5">${views}</span>
+    //                                         </div>
+    //                                         <div class="flex flex-col items-center justify-center text-center cursor-pointer group/share" onclick="sharePhoto('${img.url}', '${imgId}')">
+    //                                             <span class="text-[8.5px] filter drop-shadow-sm group-hover/share:scale-110 transition-transform">🔗</span>
+    //                                             <span id="shares-${imgId}" class="text-[7.5px] font-black text-slate-700 dark:text-slate-300 leading-none mt-0.5">${shares}</span>
+    //                                         </div>
+    //                                         <a href="/download-image/${imgId}" class="flex flex-col items-center justify-center text-center group/down block decoration-none">
+    //                                             <span class="text-[8.5px] filter drop-shadow-sm group-hover/down:scale-110 transition-transform">📥</span>
+    //                                             <span id="downloads-${imgId}" class="text-[7.5px] font-black text-slate-700 dark:text-slate-300 leading-none mt-0.5">${downloads}</span>
+    //                                         </a>
+    //                                     </div>
+
+    //                                     <div class="flex flex-wrap gap-0.5 pt-0 overflow-hidden truncate whitespace-nowrap">
+    //                                         ${tagsHtml}
+    //                                     </div>
+    //                                 </div>
+    //                             </div>
+    //                             `;
+    //                             gallery.insertAdjacentHTML('beforeend', imgHTML);
+    //                         });
+    //                         scrollPage++;
+    //                         if (loader) loader.classList.add('hidden');
+    //                     }
+    //                     isFetchingData = false;
+    //                 })
+    //                 .catch(err => {
+    //                     console.error("Infinite Scroll Error:", err);
+    //                     isFetchingData = false;
+    //                     if (loader) loader.classList.add('hidden');
+    //                 });
+    //         }
+    //     }
+    // });
 </script>
 
 <style>
@@ -768,7 +918,7 @@
           btn.innerText = "Upload to S3";
         }
       };
-    </script>
+    </>
   </body>
 </html> -->
 

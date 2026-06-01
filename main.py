@@ -1,10 +1,13 @@
 import os
 import re
-from urllib import response
 import uuid
 import boto3
 import smtplib
 import random
+import certifi
+import json
+import traceback
+from bson import json_util
 from user_agents import parse 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
 from dotenv import load_dotenv
@@ -37,7 +40,15 @@ rek_client = boto3.client('rekognition', aws_access_key_id=ACCESS_KEY, aws_secre
 
 # Database Setup
 MONGO_URI = os.getenv('MONGO_URI')
-client = MongoClient(MONGO_URI)
+import certifi
+client = MongoClient(
+    MONGO_URI,
+    tlsCAFile=certifi.where(),
+    serverSelectionTimeoutMS=3000,
+    connectTimeoutMS=3000,
+    socketTimeoutMS=3000
+)
+# client = MongoClient(MONGO_URI, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=5000)
 db = client['NexusCloud_V2']
 images_collection = db['assets']
 users_collection = db['accounts']
@@ -121,113 +132,465 @@ def inject_usage_stats():
 # CORE ROUTES (EXPLORE & SEARCH)
 # ---------------------------------------------------
 
+# @app.route('/')
+# def index():
+#     return render_template('index.html', images=[], folders=[], trending_tags=[], search_query='')
+
+# ---------------------------------------------------
+# CORE ROUTES (EXPLORE) - EXACT SAME FOR ALL USERS
+# ---------------------------------------------------
+
 @app.route('/')
 def index():
     try:
-        search_query = request.args.get('q', '').strip()
-        query = {"in_trash": False}
-        
-        if search_query:
-            query["$or"] = [
-                {"tags": {"$regex": search_query, "$options": "i"}},
-                {"filename": {"$regex": search_query, "$options": "i"}}
+        # 1. CORE PRIVACY (Sabke liye same feed - Login ho ya Non-Login)
+        query = {
+            "in_trash": {"$ne": True},
+            "$or": [
+                {"is_public": True},
+                {"folder_name": {"$regex": "^General$", "$options": "i"}}
             ]
-            query["is_public"] = True
-        else:
-            query["is_public"] = True
-        
+        }
+
+        # 2. CONTENT FILTERING (Ye sirf Login user par apply hoga)
         if current_user.is_authenticated:
-            user_profile = users_collection.find_one({"_id": ObjectId(current_user.id)})
-            blocked_tags = user_profile.get('blocked_tags', []) if user_profile else []
-            
-            if blocked_tags:
-                strict_filters = []
-                for t in blocked_tags:
-                    clean_t = str(t).strip().lower()
-                    strict_filters.append(clean_t)
-                    strict_filters.append(f"#{clean_t}")
-                
-                regex_patterns = [f"^{re.escape(tag)}$" for tag in strict_filters]
-                query["tags"] = {
-                    "$not": {
-                        "$elemMatch": {
-                            "$regex": "|".join(regex_patterns), 
-                            "$options": "i"
-                        }
-                    }
-                }
-            
-            if search_query:
-                query["$and"] = [
-                    {"$or": [{"is_public": True}, {"uploader": current_user.username}]},
-                    {"$or": [
-                        {"tags": {"$regex": search_query, "$options": "i"}},
-                        {"filename": {"$regex": search_query, "$options": "i"}}
-                    ]}
-                ]
-                query.pop("is_public", None)
-                query.pop("$or", None)
-                
-            user_folders = list(folders_collection.find({"owner": current_user.username}))
-            for folder in user_folders:
-                folder['asset_count'] = images_collection.count_documents({
-                    "uploader": current_user.username, 
-                    "folder_name": folder['folder_name'],
-                    "in_trash": False
-                })
-        else:
-            user_folders = []
-        
-        trending = list(images_collection.aggregate([
-            {"$match": query}, 
-            {"$unwind": "$tags"}, 
-            {"$group": {"_id": "$tags", "count": {"$sum": 1}}}, 
-            {"$sort": {"count": -1}}, 
-            {"$limit": 8}
-        ]))
-        
+            user_profile = users_collection.find_one({"username": current_user.username})
+            if user_profile and user_profile.get('blocked_tags'):
+                blocked_tags = user_profile['blocked_tags']
+                escaped = [re.escape(str(t).strip().lower()) for t in blocked_tags if str(t).strip()]
+                if escaped:
+                    query["$and"] = [
+                        {"tags": {"$not": {"$elemMatch": {"$regex": "|".join(escaped), "$options": "i"}}}}
+                    ]
+
+        # 3. FETCH 50 IMAGES (Dono users ke liye common execution)
         pipeline = [
             {"$match": query},
-            {"$sort": {"uploaded_at": -1}},
-            {
-                "$lookup": {
-                    "from": "accounts",
-                    "localField": "uploader",
-                    "foreignField": "username",
-                    "as": "uploader_meta"
-                }
-            },
-            {
-                "$addFields": {
-                    "profile_pic": {"$arrayElemAt": ["$uploader_meta.profile_pic", 0]}
-                }
-            }
+            {"$sort": {"uploaded_at": -1}},  # Nayi photo sabse upar
+            {"$limit": 50},                  # Sirf latest 50
+            {"$lookup": {"from": "accounts", "localField": "uploader", "foreignField": "username", "as": "uploader_meta"}},
+            {"$addFields": {"profile_pic": {"$arrayElemAt": ["$uploader_meta.profile_pic", 0]}}}
         ]
         
         all_images = list(images_collection.aggregate(pipeline))
-        return render_template('index.html', images=all_images, folders=user_folders, trending_tags=trending, search_query=search_query)
-        
+
+        # Yahan se FOLDERS UI wala logic puri tarah hata diya gaya hai
+        # Template ko seedha khali folders list [] bhej rahe hain
+        return render_template('index.html', images=all_images, folders=[], trending_tags=[], search_query='')
+
     except Exception as e:
-        print(f"Explore Core Aggregation dropout pipeline crisis: {str(e)}")
+        print("CRITICAL ERROR IN ROUTE:", e)
+        traceback.print_exc()
         return render_template('index.html', images=[], folders=[], trending_tags=[], search_query='')
+
+# @app.route('/')
+# def index():
+#     try:
+#         search_query = request.args.get('q', '').strip()
+#         per_page = 30
+        
+#         # 1. Base Query Builder (Safely ignores missing in_trash fields)
+#         query = {
+#             "in_trash": {"$ne": True}, 
+#             "$or": [
+#                 {"is_public": True},
+#                 {"folder_name": {"$regex": "^General$", "$options": "i"}}
+#             ]
+#         }
+        
+#         # 2. Search Query Logic (Regex Safe)
+#         if search_query:
+#             safe_query = re.escape(search_query)
+#             query["$and"] = [{
+#                 "$or": [
+#                     {"tags": {"$regex": safe_query, "$options": "i"}},
+#                     {"filename": {"$regex": safe_query, "$options": "i"}}
+#                 ]
+#             }]
+            
+#         # 3. Blocked Tags (User Preferences)
+#         if current_user.is_authenticated:
+#             user_profile = users_collection.find_one({"username": current_user.username})
+#             if user_profile and user_profile.get('blocked_tags'):
+#                 blocked_tags = user_profile['blocked_tags']
+#                 escaped = [re.escape(str(t).strip().lower()) for t in blocked_tags if str(t).strip()]
+#                 if escaped:
+#                     block_condition = {"tags": {"$not": {"$elemMatch": {"$regex": "|".join(escaped), "$options": "i"}}}}
+#                     # Safely append to $and query
+#                     if "$and" in query:
+#                         query["$and"].append(block_condition)
+#                     else:
+#                         query["$and"] = [block_condition]
+
+#         # 4. Folders for the Dropdown UI (Safe Sorting)
+#         user_folders = []
+#         if current_user.is_authenticated:
+#             user_folders = list(folders_collection.find({"owner": current_user.username}))
+#             user_folders.sort(key=lambda x: str(x.get('_id')), reverse=True)
+#             for folder in user_folders:
+#                 folder['asset_count'] = images_collection.count_documents({
+#                     "uploader": current_user.username, 
+#                     "folder_name": folder['folder_name'],
+#                     "in_trash": {"$ne": True}
+#                 })
+
+#         # 5. Trending Tags (Crash-Proof from Dirty Data)
+#         trending = []
+#         try:
+#             trending = list(images_collection.aggregate([
+#                 {"$match": query}, 
+#                 {"$unwind": "$tags"}, 
+#                 {"$group": {"_id": "$tags", "count": {"$sum": 1}}}, # Removed $toLower crash risk
+#                 {"$sort": {"count": -1}}, 
+#                 {"$limit": 10}
+#             ]))
+#             # Remove any empty/null tags that might have snuck in
+#             trending = [t for t in trending if t.get('_id')]
+#         except Exception as e:
+#             print("Trending aggregation skipped due to bad data:", e)
+
+#         # 6. Fetch Images
+#         pipeline = [
+#             {"$match": query},
+#             {"$sort": {"uploaded_at": -1}}, 
+#             {"$limit": per_page},
+#             {"$lookup": {"from": "accounts", "localField": "uploader", "foreignField": "username", "as": "uploader_meta"}},
+#             {"$addFields": {"profile_pic": {"$arrayElemAt": ["$uploader_meta.profile_pic", 0]}}}
+#         ]
+        
+#         all_images = list(images_collection.aggregate(pipeline))
+#         return render_template('index.html', images=all_images, folders=user_folders, trending_tags=trending, search_query=search_query)
+
+#     except Exception as e:
+#         # Ab backend silent fail nahi hoga, terminal me exact error dega
+#         print("CRITICAL INDEX ERROR:", e)
+#         traceback.print_exc()
+#         return render_template('index.html', images=[], folders=[], trending_tags=[], search_query='')
+
+
+# # ------------------------------------------------------------------
+# # INFINITE SCROLL BACKEND (Same Crash-Proof Logic)
+# # ------------------------------------------------------------------
+# @app.route('/load-more')
+# def load_more():
+#     try:
+#         scroll_page = request.args.get('page', 1, type=int)
+#         search_query = request.args.get('q', '').strip()
+#         skip_count = 30 + ((scroll_page - 1) * 20)
+#         per_page = 20
+        
+#         query = {
+#             "in_trash": {"$ne": True},
+#             "$or": [
+#                 {"is_public": True},
+#                 {"folder_name": {"$regex": "^General$", "$options": "i"}}
+#             ]
+#         }
+        
+#         if search_query:
+#             safe_query = re.escape(search_query)
+#             query["$and"] = [{
+#                 "$or": [
+#                     {"tags": {"$regex": safe_query, "$options": "i"}},
+#                     {"filename": {"$regex": safe_query, "$options": "i"}}
+#                 ]
+#             }]
+            
+#         if current_user.is_authenticated:
+#             user_profile = users_collection.find_one({"username": current_user.username})
+#             if user_profile and user_profile.get('blocked_tags'):
+#                 blocked_tags = user_profile['blocked_tags']
+#                 escaped = [re.escape(str(t).strip().lower()) for t in blocked_tags if str(t).strip()]
+#                 if escaped:
+#                     block_condition = {"tags": {"$not": {"$elemMatch": {"$regex": "|".join(escaped), "$options": "i"}}}}
+#                     if "$and" in query:
+#                         query["$and"].append(block_condition)
+#                     else:
+#                         query["$and"] = [block_condition]
+
+#         pipeline = [
+#             {"$match": query},
+#             {"$sort": {"uploaded_at": -1}}, 
+#             {"$skip": skip_count},          
+#             {"$limit": per_page},           
+#             {"$lookup": {"from": "accounts", "localField": "uploader", "foreignField": "username", "as": "uploader_meta"}},
+#             {"$addFields": {"profile_pic": {"$arrayElemAt": ["$uploader_meta.profile_pic", 0]}}}
+#         ]
+        
+#         new_images = list(images_collection.aggregate(pipeline))
+#         return json.loads(json_util.dumps(new_images))
+        
+#     except Exception as e:
+#         print("Infinite Scroll Error:", e)
+#         return jsonify([])
+
+# @app.route('/')
+# def index():
+#     try:
+#         search_query = request.args.get('q', '').strip()
+        
+#         # DEFAULT: Shuru mein 30 images laayenge
+#         per_page = 30 
+        
+#         query = {"in_trash": False}
+        
+#         if search_query:
+#             query["$or"] = [
+#                 {"tags": {"$regex": search_query, "$options": "i"}},
+#                 {"filename": {"$regex": search_query, "$options": "i"}}
+#             ]
+#             query["is_public"] = True
+#         else:
+#             query["is_public"] = True
+        
+#         if current_user.is_authenticated:
+#             user_profile = users_collection.find_one({"_id": ObjectId(current_user.id)})
+#             blocked_tags = user_profile.get('blocked_tags', []) if user_profile else []
+            
+#             if blocked_tags:
+#                 strict_filters = []
+#                 for t in blocked_tags:
+#                     clean_t = str(t).strip().lower()
+#                     strict_filters.append(clean_t)
+#                     strict_filters.append(f"#{clean_t}")
+                
+#                 regex_patterns = [f"^{re.escape(tag)}$" for tag in strict_filters]
+#                 query["tags"] = {
+#                     "$not": {
+#                         "$elemMatch": {
+#                             "$regex": "|".join(regex_patterns), 
+#                             "$options": "i"
+#                         }
+#                     }
+#                 }
+            
+#             if search_query:
+#                 query["$and"] = [
+#                     {"$or": [{"is_public": True}, {"uploader": current_user.username}]},
+#                     {"$or": [
+#                         {"tags": {"$regex": search_query, "$options": "i"}},
+#                         {"filename": {"$regex": search_query, "$options": "i"}}
+#                     ]}
+#                 ]
+#                 query.pop("is_public", None)
+#                 query.pop("$or", None)
+                
+#             user_folders = list(folders_collection.find({"owner": current_user.username}))
+#             for folder in user_folders:
+#                 folder['asset_count'] = images_collection.count_documents({
+#                     "uploader": current_user.username, 
+#                     "folder_name": folder['folder_name'],
+#                     "in_trash": False
+#                 })
+#         else:
+#             user_folders = []
+        
+#         trending = list(images_collection.aggregate([
+#             {"$match": query}, 
+#             {"$unwind": "$tags"}, 
+#             {"$group": {"_id": "$tags", "count": {"$sum": 1}}}, 
+#             {"$sort": {"count": -1}}, 
+#             {"$limit": 8}
+#         ]))
+        
+#         pipeline = [
+#             {"$match": query},
+#             {"$sort": {"uploaded_at": -1}}, # NEWEST FIRST RULE
+#             {"$limit": per_page},           # SIRF 30 IMAGES LOAD HOGI
+#             {
+#                 "$lookup": {
+#                     "from": "accounts",
+#                     "localField": "uploader",
+#                     "foreignField": "username",
+#                     "as": "uploader_meta"
+#                 }
+#             },
+#             {
+#                 "$addFields": {
+#                     "profile_pic": {"$arrayElemAt": ["$uploader_meta.profile_pic", 0]}
+#                 }
+#             }
+#         ]
+        
+#         all_images = list(images_collection.aggregate(pipeline))
+#         return render_template('index.html', images=all_images, folders=user_folders, trending_tags=trending, search_query=search_query)
+        
+#     except Exception as e:
+#         print(f"Explore Core Crisis: {str(e)}")
+#         return render_template('index.html', images=[], folders=[], trending_tags=[], search_query='')
+
+# # ------------------------------------------------------------------
+# # 🔥 NAYA ROUTE: INFINITE SCROLL KE LIYE (Peeche se data layega)
+# # ------------------------------------------------------------------
+# @app.route('/load-more')
+# def load_more():
+#     try:
+#         # Scroll count 1 se start hoga
+#         scroll_page = request.args.get('page', 1, type=int)
+#         search_query = request.args.get('q', '').strip()
+        
+#         # LOGIC: Pehle 30 already aachuke hain. Ab agle 20 lane hain.
+#         # Agar scroll 1 hai: 30 skip karo, 20 lao. Agar scroll 2 hai: 50 skip karo, 20 lao.
+#         skip_count = 30 + ((scroll_page - 1) * 20)
+#         per_page = 20
+        
+#         # SAME FILTERS TAAKI SEARCH BHI SATH MEIN CHALE
+#         query = {"in_trash": False}
+#         if search_query:
+#             query["$or"] = [{"tags": {"$regex": search_query, "$options": "i"}}, {"filename": {"$regex": search_query, "$options": "i"}}]
+#             query["is_public"] = True
+#         else:
+#             query["is_public"] = True
+            
+#         if current_user.is_authenticated:
+#             query["$or"] = [{"is_public": True}, {"uploader": current_user.username}]
+#             query.pop("is_public", None)
+
+#         pipeline = [
+#             {"$match": query},
+#             {"$sort": {"uploaded_at": -1}}, # Hamesha newest first
+#             {"$skip": skip_count},          # Purani ignore karo
+#             {"$limit": per_page},           # Nayi 20 uthao
+#             {"$lookup": {"from": "accounts", "localField": "uploader", "foreignField": "username", "as": "uploader_meta"}},
+#             {"$addFields": {"profile_pic": {"$arrayElemAt": ["$uploader_meta.profile_pic", 0]}}}
+#         ]
+        
+#         new_images = list(images_collection.aggregate(pipeline))
+        
+#         # json_util se safe conversion hoti hai (_id string ban jayega)
+#         return json.loads(json_util.dumps(new_images))
+        
+#     except Exception as e:
+#         print("Infinite Scroll Failed:", str(e))
+#         return jsonify([])
+
+# @app.route('/')
+# def index():
+#     try:
+#         search_query = request.args.get('q', '').strip()
+#         query = {"in_trash": False}
+        
+#         if search_query:
+#             query["$or"] = [
+#                 {"tags": {"$regex": search_query, "$options": "i"}},
+#                 {"filename": {"$regex": search_query, "$options": "i"}}
+#             ]
+#             query["is_public"] = True
+#         else:
+#             query["is_public"] = True
+        
+#         if current_user.is_authenticated:
+#             user_profile = users_collection.find_one({"_id": ObjectId(current_user.id)})
+#             blocked_tags = user_profile.get('blocked_tags', []) if user_profile else []
+            
+#             if blocked_tags:
+#                 strict_filters = []
+#                 for t in blocked_tags:
+#                     clean_t = str(t).strip().lower()
+#                     strict_filters.append(clean_t)
+#                     strict_filters.append(f"#{clean_t}")
+                
+#                 regex_patterns = [f"^{re.escape(tag)}$" for tag in strict_filters]
+#                 query["tags"] = {
+#                     "$not": {
+#                         "$elemMatch": {
+#                             "$regex": "|".join(regex_patterns), 
+#                             "$options": "i"
+#                         }
+#                     }
+#                 }
+            
+#             if search_query:
+#                 query["$and"] = [
+#                     {"$or": [{"is_public": True}, {"uploader": current_user.username}]},
+#                     {"$or": [
+#                         {"tags": {"$regex": search_query, "$options": "i"}},
+#                         {"filename": {"$regex": search_query, "$options": "i"}}
+#                     ]}
+#                 ]
+#                 query.pop("is_public", None)
+#                 query.pop("$or", None)
+                
+#             user_folders = list(folders_collection.find({"owner": current_user.username}))
+#             for folder in user_folders:
+#                 folder['asset_count'] = images_collection.count_documents({
+#                     "uploader": current_user.username, 
+#                     "folder_name": folder['folder_name'],
+#                     "in_trash": False
+#                 })
+#         else:
+#             user_folders = []
+        
+#         trending = list(images_collection.aggregate([
+#             {"$match": query}, 
+#             {"$unwind": "$tags"}, 
+#             {"$group": {"_id": "$tags", "count": {"$sum": 1}}}, 
+#             {"$sort": {"count": -1}}, 
+#             {"$limit": 8}
+#         ]))
+        
+#         pipeline = [
+#             {"$match": query},
+#             {"$sort": {"uploaded_at": -1}},
+#             {
+#                 "$lookup": {
+#                     "from": "accounts",
+#                     "localField": "uploader",
+#                     "foreignField": "username",
+#                     "as": "uploader_meta"
+#                 }
+#             },
+#             {
+#                 "$addFields": {
+#                     "profile_pic": {"$arrayElemAt": ["$uploader_meta.profile_pic", 0]}
+#                 }
+#             }
+#         ]
+        
+#         all_images = list(images_collection.aggregate(pipeline))
+#         return render_template('index.html', images=all_images, folders=user_folders, trending_tags=trending, search_query=search_query)
+        
+#     except Exception as e:
+#         print(f"Explore Core Aggregation dropout pipeline crisis: {str(e)}")
+#         return render_template('index.html', images=[], folders=[], trending_tags=[], search_query='')
+
+#---------------------------------------------------------------------------------
+# General folder ke purane images ko public karo
+#---------------------------------------------------------------------------------
+# @app.route('/fix-old-data')
+# def fix_old_data():
+#     result = images_collection.update_many(
+#         {"folder_name": {"$regex": "^General$", "$options": "i"}, "in_trash": False},
+#         {"$set": {"is_public": True}}
+#     )
+#     return f"Fixed! {result.modified_count} images updated to public."
 
 @app.route('/search')
 def search():
     query = request.args.get('q')
     if not query: return redirect(url_for('index'))
 
+    # 1. Search Filters Logic (अब Public OR General फोल्डर दोनों की इमेजेज सर्च होंगी)
     search_filter = {
         "in_trash": False,
         "$or": [
-            {"tags": {"$regex": query, "$options": "i"}},
-            {"filename": {"$regex": query, "$options": "i"}}
+            {"is_public": True},          # कंडीशन 1: इमेज पब्लिक हो
+            {"folder_name": "General"}   # कंडीशन 2: या फिर General फोल्डर की हो
         ],
-        "$and": [{"$or": [{"is_public": True}]}]
+        "$and": [
+            {
+                "$or": [
+                    {"tags": {"$regex": query, "$options": "i"}},
+                    {"filename": {"$regex": query, "$options": "i"}}
+                ]
+            }
+        ]
     }
     
     if current_user.is_authenticated:
         user_profile = users_collection.find_one({"_id": ObjectId(current_user.id)})
         blocked_tags = user_profile.get('blocked_tags', []) if user_profile else []
+        
         if blocked_tags:
             strict_filters = []
             for t in blocked_tags:
@@ -235,6 +598,8 @@ def search():
                 strict_filters.append(clean_t)
                 strict_filters.append(f"#{clean_t}")
             regex_patterns = [f"^{re.escape(tag)}$" for tag in strict_filters]
+            
+            # Blocked tags को सर्च रिजल्ट्स से हटाना
             search_filter["tags"] = {
                 "$not": {
                     "$elemMatch": {
@@ -243,11 +608,17 @@ def search():
                     }
                 }
             }
-            
-        search_filter["$and"][0]["$or"].append({"uploader": current_user.username})
 
+    # 2. Fetching Images
     results = list(images_collection.find(search_filter).sort("uploaded_at", -1))
-    return render_template('index.html', images=results, search_query=query)
+    
+    # 3. Fetching Folders for the Upload UI
+    user_folders = []
+    if current_user.is_authenticated:
+        user_folders = list(folders_collection.find({"owner": current_user.username}).sort("_id", -1))
+        
+    # 4. Rendering Template
+    return render_template('index.html', images=results, search_query=query, folders=user_folders)
 
 @app.route('/increment-view/<img_id>', methods=['POST'])
 @login_required
@@ -316,27 +687,54 @@ def upload():
     uploader = current_user.username if current_user.is_authenticated else "Guest"
     
     try:
+        # --- FOLDER PRIVACY CHECK (Loop ke bahar taaki DB fast rahe) ---
+        is_public_flag = False
+        if selected_folder.lower() == 'general':
+            is_public_flag = True  # General folder hamesha public
+        elif current_user.is_authenticated:
+            folder_doc = folders_collection.find_one({
+                "folder_name": selected_folder, 
+                "owner": current_user.username
+            })
+            # Agar folder public hai toh naya upload bhi public hoga
+            is_public_flag = folder_doc.get('is_public', False) if folder_doc else False
+
+        # --- PROCESS & UPLOAD FILES ---
         for file in files:
             if file and file.filename != '':
                 orig_name = secure_filename(file.filename)
                 filename = f"{datetime.now().timestamp()}_{orig_name}"
                 
+                # AWS S3 Upload
                 s3_client.upload_fileobj(file, BUCKET_NAME, filename, ExtraArgs={'ContentType': file.content_type})
                 
+                # AWS Rekognition AI Tags
                 rek_response = rek_client.detect_labels(Image={'S3Object': {'Bucket': BUCKET_NAME, 'Name': filename}}, MaxLabels=10)
                 ai_tags = [label['Name'].lower() for label in rek_response['Labels']]
                 
                 final_tags = list(set(ai_tags + [t.strip().lower() for t in manual_tags if t.strip()]))
                 file_url = f"https://{BUCKET_NAME}.s3.{REGION}.amazonaws.com/{filename}"
                 
+                # Save to Database
                 images_collection.insert_one({
-                    "filename": orig_name, "s3_key": filename, "url": file_url, "tags": final_tags,
-                    "uploader": uploader, "folder_name": selected_folder,
-                    "views": 0, "likes": 0, "shares": 0, "downloads": 0, "is_favorite": False,
-                    "in_trash": False, "uploaded_at": datetime.utcnow(), "is_public": False
+                    "filename": orig_name, 
+                    "s3_key": filename, 
+                    "url": file_url, 
+                    "tags": final_tags,
+                    "uploader": uploader, 
+                    "folder_name": selected_folder,
+                    "views": 0, 
+                    "likes": 0, 
+                    "shares": 0, 
+                    "downloads": 0, 
+                    "is_favorite": False,
+                    "in_trash": False, 
+                    "uploaded_at": datetime.utcnow(), 
+                    "is_public": is_public_flag   # ← FIXED
                 })
 
         return jsonify({"status": "success", "message": "Assets Synchronized Successfully"})
+    
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -346,7 +744,7 @@ def create_folder():
     folder_name = request.form.get('folder_name')
     if folder_name:
         folders_collection.insert_one({
-            "folder_name": folder_name,
+            "folder_name": folder_name.strip(),
             "owner": current_user.username,
             "is_public": False,
             "created_at": datetime.utcnow()
@@ -1036,5 +1434,44 @@ def logout():
     flash("Signed out.", "success")
     return redirect(url_for('index'))
 
+# @app.route('/debug-check')
+# def debug_check():
+#     try:
+#         # Total images in DB
+#         total = images_collection.count_documents({})
+#         public = images_collection.count_documents({"is_public": True})
+#         general = images_collection.count_documents({"folder_name": {"$regex": "^General$", "$options": "i"}})
+#         with_tags = images_collection.count_documents({"tags": {"$exists": True, "$ne": []}})
+        
+#         # Sample image to see its structure
+#         sample = images_collection.find_one({})
+#         sample_info = {
+#             "folder": sample.get("folder_name") if sample else None,
+#             "is_public": sample.get("is_public") if sample else None,
+#             "tags": sample.get("tags", [])[:5] if sample else None,
+#             "uploader": sample.get("uploader") if sample else None
+#         }
+        
+#         # Folders in DB
+#         folders = []
+#         if current_user.is_authenticated:
+#             folders = list(folders_collection.find(
+#                 {"owner": current_user.username}, 
+#                 {"folder_name": 1, "_id": 0}
+#             ))
+
+#         return jsonify({
+#             "total_images": total,
+#             "public_images": public,
+#             "general_folder_images": general,
+#             "images_with_tags": with_tags,
+#             "sample_image": sample_info,
+#             "your_folders_in_db": folders,
+#             "logged_in_as": current_user.username if current_user.is_authenticated else "NOT LOGGED IN"
+#         })
+#     except Exception as e:
+#         return jsonify({"error": str(e)})
+
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000, debug=True, threaded=False)
+    # host ko '0.0.0.0' karna zaroori hai
+    app.run(host='0.0.0.0', port=5000, debug=True)
