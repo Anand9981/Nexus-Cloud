@@ -44,9 +44,6 @@ import certifi
 client = MongoClient(
     MONGO_URI,
     tlsCAFile=certifi.where(),
-    serverSelectionTimeoutMS=3000,
-    connectTimeoutMS=3000,
-    socketTimeoutMS=3000
 )
 # client = MongoClient(MONGO_URI, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=5000)
 db = client['NexusCloud_V2']
@@ -136,52 +133,127 @@ def inject_usage_stats():
 # def index():
 #     return render_template('index.html', images=[], folders=[], trending_tags=[], search_query='')
 
-# ---------------------------------------------------
-# CORE ROUTES (EXPLORE) - EXACT SAME FOR ALL USERS
-# ---------------------------------------------------
-
 @app.route('/')
 def index():
     try:
-        # 1. CORE PRIVACY (Sabke liye same feed - Login ho ya Non-Login)
+        search_query = request.args.get('q', '').strip()
+        per_page = 15 
+        
         query = {
-            "in_trash": {"$ne": True},
+            "in_trash": {"$ne": True}, 
             "$or": [
                 {"is_public": True},
                 {"folder_name": {"$regex": "^General$", "$options": "i"}}
             ]
         }
-
-        # 2. CONTENT FILTERING (Ye sirf Login user par apply hoga)
+        
+        if search_query:
+            safe_query = re.escape(search_query)
+            query["$and"] = [{
+                "$or": [
+                    {"tags": {"$regex": safe_query, "$options": "i"}},
+                    {"filename": {"$regex": safe_query, "$options": "i"}}
+                ]
+            }]
+            
         if current_user.is_authenticated:
             user_profile = users_collection.find_one({"username": current_user.username})
             if user_profile and user_profile.get('blocked_tags'):
                 blocked_tags = user_profile['blocked_tags']
                 escaped = [re.escape(str(t).strip().lower()) for t in blocked_tags if str(t).strip()]
                 if escaped:
-                    query["$and"] = [
-                        {"tags": {"$not": {"$elemMatch": {"$regex": "|".join(escaped), "$options": "i"}}}}
-                    ]
+                    block_condition = {"tags": {"$not": {"$elemMatch": {"$regex": "|".join(escaped), "$options": "i"}}}}
+                    if "$and" in query:
+                        query["$and"].append(block_condition)
+                    else:
+                        query["$and"] = [block_condition]
 
-        # 3. FETCH 50 IMAGES (Dono users ke liye common execution)
+        user_folders = []
+        if current_user.is_authenticated:
+            user_folders = list(folders_collection.find({"owner": current_user.username}))
+            user_folders.sort(key=lambda x: str(x.get('_id')), reverse=True)
+            for folder in user_folders:
+                folder['asset_count'] = images_collection.count_documents({
+                    "uploader": current_user.username, 
+                    "folder_name": folder['folder_name'],
+                    "in_trash": {"$ne": True}
+                })
+
+        trending = []
+        try:
+            trending = list(images_collection.aggregate([
+                {"$match": query}, 
+                {"$unwind": "$tags"}, 
+                {"$group": {"_id": "$tags", "count": {"$sum": 1}}}, 
+                {"$sort": {"count": -1}}, 
+                {"$limit": 10}
+            ]))
+            trending = [t for t in trending if t.get('_id')]
+        except Exception:
+            pass
+
         pipeline = [
             {"$match": query},
-            {"$sort": {"uploaded_at": -1}},  # Nayi photo sabse upar
-            {"$limit": 50},                  # Sirf latest 50
+            {"$sort": {"uploaded_at": -1}}, 
+            {"$limit": per_page},
             {"$lookup": {"from": "accounts", "localField": "uploader", "foreignField": "username", "as": "uploader_meta"}},
             {"$addFields": {"profile_pic": {"$arrayElemAt": ["$uploader_meta.profile_pic", 0]}}}
         ]
         
         all_images = list(images_collection.aggregate(pipeline))
-
-        # Yahan se FOLDERS UI wala logic puri tarah hata diya gaya hai
-        # Template ko seedha khali folders list [] bhej rahe hain
-        return render_template('index.html', images=all_images, folders=[], trending_tags=[], search_query='')
+        return render_template('index.html', images=all_images, folders=user_folders, trending_tags=trending, search_query=search_query)
 
     except Exception as e:
-        print("CRITICAL ERROR IN ROUTE:", e)
-        traceback.print_exc()
+        print("CRITICAL INDEX ERROR:", e)
+        # Agar database fail hua toh user ko empty gallery dikhegi, safed error screen nahi!
         return render_template('index.html', images=[], folders=[], trending_tags=[], search_query='')
+
+# ---------------------------------------------------
+# CORE ROUTES (EXPLORE) - EXACT SAME FOR ALL USERS
+# ---------------------------------------------------
+
+# @app.route('/')
+# def index():
+#     try:
+#         # 1. CORE PRIVACY (Sabke liye same feed - Login ho ya Non-Login)
+#         query = {
+#             "in_trash": {"$ne": True},
+#             "$or": [
+#                 {"is_public": True},
+#                 {"folder_name": {"$regex": "^General$", "$options": "i"}}
+#             ]
+#         }
+
+#         # 2. CONTENT FILTERING (Ye sirf Login user par apply hoga)
+#         if current_user.is_authenticated:
+#             user_profile = users_collection.find_one({"username": current_user.username})
+#             if user_profile and user_profile.get('blocked_tags'):
+#                 blocked_tags = user_profile['blocked_tags']
+#                 escaped = [re.escape(str(t).strip().lower()) for t in blocked_tags if str(t).strip()]
+#                 if escaped:
+#                     query["$and"] = [
+#                         {"tags": {"$not": {"$elemMatch": {"$regex": "|".join(escaped), "$options": "i"}}}}
+#                     ]
+
+#         # 3. FETCH 50 IMAGES (Dono users ke liye common execution)
+#         pipeline = [
+#             {"$match": query},
+#             {"$sort": {"uploaded_at": -1}},  # Nayi photo sabse upar
+#             {"$limit": 50},                  # Sirf latest 50
+#             {"$lookup": {"from": "accounts", "localField": "uploader", "foreignField": "username", "as": "uploader_meta"}},
+#             {"$addFields": {"profile_pic": {"$arrayElemAt": ["$uploader_meta.profile_pic", 0]}}}
+#         ]
+        
+#         all_images = list(images_collection.aggregate(pipeline))
+
+#         # Yahan se FOLDERS UI wala logic puri tarah hata diya gaya hai
+#         # Template ko seedha khali folders list [] bhej rahe hain
+#         return render_template('index.html', images=all_images, folders=[], trending_tags=[], search_query='')
+
+#     except Exception as e:
+#         print("CRITICAL ERROR IN ROUTE:", e)
+#         traceback.print_exc()
+#         return render_template('index.html', images=[], folders=[], trending_tags=[], search_query='')
 
 # @app.route('/')
 # def index():
@@ -1356,54 +1428,106 @@ def signup():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        input_username = request.form.get('username', '').strip()
-        input_password = request.form.get('password', '')
-        
-        user_data = users_collection.find_one({"username": input_username})
-        
-        # 🛡️ CASE 1: UNIVERSAL IDENTITY INVALID
-        if not user_data:
-            return render_template('401.html', text_override="Requested profile ID is invalid. Please verify your identity name and try again."), 401
+        try:
+            input_username = request.form.get('username', '').strip()
+            input_password = request.form.get('password', '')
             
-        # 🛡️ CASE 2: IDENTITY IS VALID BUT PASSWORD SIGNATURE REJECTED
-        if not check_password_hash(user_data['password'], input_password):
-            return jsonify({
-                'status': 'password_error', 
-                'message': 'Incorrect password signature. Please try again.'
+            user_data = users_collection.find_one({"username": input_username})
+            
+            if not user_data:
+                return render_template('401.html', text_override="Requested profile ID is invalid..."), 401
+                
+            if not check_password_hash(user_data['password'], input_password):
+                return jsonify({
+                    'status': 'password_error', 
+                    'message': 'Incorrect password signature. Please try again.'
+                })
+                
+            login_user(User(user_data))
+            session_token = str(uuid.uuid4())
+            
+            ua = parse(request.user_agent.string)
+            device_info = f"{ua.browser.family} on {ua.os.family}"
+            
+            session_data = {
+                "user_id": user_data['_id'],
+                "session_token": session_token,
+                "device_info": request.user_agent.string,
+                "ip_address": request.remote_addr,
+                "last_active": datetime.utcnow()
+            }
+            db.sessions.insert_one(session_data)
+            
+            response = jsonify({
+                'status': 'success', 
+                'redirect_url': url_for('index'),
+                'message': 'Master security authorization data metrics synchronized successfully.'
             })
             
-        # 🟢 CASE 3: ALL SIGNATURES REGISTERED SUCCESSFULLY
-        login_user(User(user_data))
-        
-        # 1. Generate Session Token for device tracking
-        session_token = str(uuid.uuid4())
-        
-        # 2. Store in Database session nodes
-        ua = parse(request.user_agent.string)
-        device_info = f"{ua.browser.family} on {ua.os.family}" # Result: "Chrome on Windows 11"
-        
-        session_data = {
-            "user_id": user_data['_id'],
-            "session_token": session_token,
-            "device_info": request.user_agent.string,
-            "ip_address": request.remote_addr,
-            "last_active": datetime.utcnow()
-        }
-        db.sessions.insert_one(session_data)
-        
-        # 3. Construct Nexus Authenticated Response
-        response = jsonify({
-            'status': 'success', 
-            'redirect_url': url_for('index'),
-            'message': 'Master security authorization data metrics synchronized successfully.'
-        })
-        
-        # login route में यहाँ बदलाव करें:
-        response.set_cookie('nexus_session_token', session_token, httponly=True, secure=False)
-        
-        return response
-        
+            response.set_cookie('nexus_session_token', session_token, httponly=True, secure=False)
+            return response
+            
+        except Exception as e:
+            print("LOGIN DATABASE TIMEOUT ERROR:", e)
+            # Safely return JSON so the frontend doesn't freeze
+            return jsonify({
+                'status': 'error', 
+                'message': 'Database connection failed. Please check backend logs.'
+            }), 500
+            
     return render_template('login.html')
+
+# @app.route('/login', methods=['GET', 'POST'])
+# def login():
+#     if request.method == 'POST':
+#         input_username = request.form.get('username', '').strip()
+#         input_password = request.form.get('password', '')
+        
+#         user_data = users_collection.find_one({"username": input_username})
+        
+#         # 🛡️ CASE 1: UNIVERSAL IDENTITY INVALID
+#         if not user_data:
+#             return render_template('401.html', text_override="Requested profile ID is invalid. Please verify your identity name and try again."), 401
+            
+#         # 🛡️ CASE 2: IDENTITY IS VALID BUT PASSWORD SIGNATURE REJECTED
+#         if not check_password_hash(user_data['password'], input_password):
+#             return jsonify({
+#                 'status': 'password_error', 
+#                 'message': 'Incorrect password signature. Please try again.'
+#             })
+            
+#         # 🟢 CASE 3: ALL SIGNATURES REGISTERED SUCCESSFULLY
+#         login_user(User(user_data))
+        
+#         # 1. Generate Session Token for device tracking
+#         session_token = str(uuid.uuid4())
+        
+#         # 2. Store in Database session nodes
+#         ua = parse(request.user_agent.string)
+#         device_info = f"{ua.browser.family} on {ua.os.family}" # Result: "Chrome on Windows 11"
+        
+#         session_data = {
+#             "user_id": user_data['_id'],
+#             "session_token": session_token,
+#             "device_info": request.user_agent.string,
+#             "ip_address": request.remote_addr,
+#             "last_active": datetime.utcnow()
+#         }
+#         db.sessions.insert_one(session_data)
+        
+#         # 3. Construct Nexus Authenticated Response
+#         response = jsonify({
+#             'status': 'success', 
+#             'redirect_url': url_for('index'),
+#             'message': 'Master security authorization data metrics synchronized successfully.'
+#         })
+        
+#         # login route में यहाँ बदलाव करें:
+#         response.set_cookie('nexus_session_token', session_token, httponly=True, secure=False)
+        
+#         return response
+        
+#     return render_template('login.html')
 
 @app.route('/settings', methods=['GET'])
 @login_required

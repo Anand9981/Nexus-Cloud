@@ -143,7 +143,13 @@
                 document.close();
                 return;
             }
-            
+            //new added remove it if need
+            if (!response.ok) {
+                passwordErrorMessage.innerText = "Server connection failed. Check database IP settings.";
+                passwordErrorNode.classList.remove('hidden');
+                return; // Stop execution here
+            } //end new added
+
             const result = await response.json();
             
             if (result.status === 'success') {
