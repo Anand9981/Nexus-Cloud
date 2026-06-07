@@ -228,9 +228,9 @@
             <a href="/?q={{ tag._id }}#gallery-section" 
                class="bg-white dark:bg-slate-800 px-4 py-2 rounded-xl text-[10px] font-black text-slate-500 hover:bg-nexus hover:text-white transition-all border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-1">
                 <span>#{{ tag._id }}</span>
-                {% if tag.count and tag.count > 1 %}
+                <!-- {% if tag.count and tag.count > 1 %}
                 <span class="text-[8px] bg-blue-100 dark:bg-blue-900/30 text-nexus px-1 rounded font-black">{{ tag.count }}</span>
-                {% endif %}
+                {% endif %} -->
             </a>
             {% endfor %}
         </div>
@@ -254,7 +254,7 @@
             <div class="absolute top-1.5 right-1.5 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur shadow-sm p-0.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-[9px]" onclick="event.stopPropagation();">⋮</div>
 
             <div class="aspect-square w-full max-h-[190px] overflow-hidden bg-slate-100 dark:bg-slate-900 relative flex-shrink-0 border-b border-slate-50 dark:border-slate-800/20">
-                <img src="{{ img.url }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="{{ img.filename }}">
+                <img src="{{ img.thumb_url if img.thumb_url else img.url }}" onerror="this.src='{{ img.url }}'" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="{{ img.filename }}">
             </div>
 
             <div class="py-1.5 px-2 space-y-1 flex-1 flex flex-col justify-between bg-white dark:bg-[#1E293B]">
@@ -314,10 +314,12 @@
     </div>
 </div>
 
-<!-- <div id="loading-indicator" class="hidden text-center py-4">
-        <span class="inline-block animate-spin text-xl">🌀</span>
-        <p class="text-[10px] font-black text-slate-400 mt-2 uppercase tracking-widest">Fetching more memories...</p>
-</div> -->
+<div id="infinite-scroll-sensor" class="w-full py-8 flex justify-center items-center">
+    <div id="scroll-spinner" class="hidden flex-col items-center">
+        <span class="animate-spin text-2xl">🌀</span>
+        <p class="text-[10px] font-black text-slate-400 mt-2 uppercase tracking-widest">Fetching more assets...</p>
+    </div>
+</div>
 
 <div id="lightbox-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md hidden z-[999] flex items-center justify-center p-4 animate-fadeIn" onclick="closeImageLightbox()">
     <div class="relative max-w-4xl max-h-[85vh] flex items-center justify-center" onclick="event.stopPropagation()">
@@ -557,118 +559,128 @@
         }
     });
 
-    // ------------------------------------------------------------------
-    // 🔥 FIXED INFINITE SCROLL SCRIPT WTH BEAUTIFUL CARDS
-    // ------------------------------------------------------------------
-    let scrollPage = 1; // page 1 is already handled by jinja render
-    let isFetchingData = false;
-    let imagesAvailable = true;
-    const loader = document.getElementById('loading-indicator');
+// ------------------------------------------------------------------
+// 🔥 MODERN INFINITE SCROLL (INTERSECTION OBSERVER)
+// ------------------------------------------------------------------
+document.addEventListener("DOMContentLoaded", function() {
+    let scrollPage = 2; 
+    let isFetching = false;
+    let hasMoreImages = true;
     
-    // // Taki search karte waqt bhi scroll sahi endpoint ko call kare
-    // const sParams = new URLSearchParams(window.location.search);
-    // const sQuery = sParams.get('q') || '';
+    const sensor = document.getElementById('infinite-scroll-sensor');
+    const spinner = document.getElementById('scroll-spinner');
+    const gallery = document.getElementById('gallery-container');
+    
+    const sParams = new URLSearchParams(window.location.search);
+    const sQuery = sParams.get('q') || '';
 
-    // window.addEventListener('scroll', () => {
-    //     if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 800) {
-    //         if (!isFetchingData && imagesAvailable) {
-    //             isFetchingData = true;
-    //             if (loader) loader.classList.remove('hidden');
-                
-    //             // Fetch next images
-    //             fetch(`/load-more?page=${scrollPage}&q=${sQuery}`)
-    //                 .then(response => response.json())
-    //                 .then(data => {
-    //                     if (data.length === 0) {
-    //                         imagesAvailable = false; // Aur images nahi bachi DB mein
-    //                         if (loader) loader.classList.add('hidden');
-    //                     } else {
-    //                         const gallery = document.getElementById('gallery-container'); 
-                            
-    //                         data.forEach(img => {
-    //                             // Extract properties safely
-    //                             const imgId = img._id && img._id.$oid ? img._id.$oid : img._id;
-    //                             const folderName = img.folder_name || 'General';
-    //                             const profilePic = img.profile_pic || '/static/images/avatars/default.png';
-    //                             const uploader = img.uploader || 'Unknown';
-    //                             const likes = img.likes || 0;
-    //                             const views = img.views || 0;
-    //                             const shares = img.shares || 0;
-    //                             const downloads = img.downloads || 0;
+    const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !isFetching && hasMoreImages) {
+            fetchMoreImages();
+        }
+    }, { rootMargin: "200px" }); 
 
-    //                             // Tags builder
-    //                             let tagsHtml = '';
-    //                             if (img.tags && img.tags.length > 0) {
-    //                                 img.tags.slice(0, 4).forEach(tag => {
-    //                                     tagsHtml += `<span class="text-[9px] font-black text-nexus bg-blue-50/40 dark:bg-blue-950/20 border border-blue-100/20 dark:border-blue-900/20 px-1.5 py-0.5 rounded uppercase tracking-tight">#${tag}</span>`;
-    //                                 });
-    //                             } else {
-    //                                 tagsHtml = `<span class="text-[9px] font-black text-slate-300 uppercase tracking-tight">#UNTAGGED</span>`;
-    //                             }
+    if (sensor) {
+        observer.observe(sensor);
+    }
 
-    //                             // 🔥 PERFECT TAILWIND HTML CARD 🔥
-    //                             const imgHTML = `
-    //                             <div class="bg-white dark:bg-[#1E293B] rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden group hover:shadow-md transition-all duration-300 flex flex-col relative animate-fadeIn">
-    //                                 <div class="absolute top-1.5 right-1.5 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur shadow-sm p-0.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-[9px]" onclick="event.stopPropagation();">⋮</div>
+    async function fetchMoreImages() {
+        if (isFetching) return;
+        isFetching = true;
+        spinner.classList.remove('hidden');
+        spinner.classList.add('flex');
 
-    //                                 <div class="aspect-square w-full max-h-[190px] overflow-hidden bg-slate-100 dark:bg-slate-900 relative flex-shrink-0 border-b border-slate-50 dark:border-slate-800/20">
-    //                                     <img src="${img.url}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="${img.filename}">
-    //                                 </div>
+        try {
+            const response = await fetch(`/load-more?page=${scrollPage}&q=${sQuery}`);
+            const data = await response.json();
 
-    //                                 <div class="py-1.5 px-2 space-y-1 flex-1 flex flex-col justify-between bg-white dark:bg-[#1E293B]">
-    //                                     <div class="flex items-center justify-between gap-1">
-    //                                         <div class="flex items-center gap-0.5 min-w-0">
-    //                                             <span class="text-[8px]">📁</span>
-    //                                             <p class="text-[7.5px] font-black text-slate-400 uppercase tracking-wider truncate">
-    //                                                 ROOM: <span class="text-slate-500 dark:text-slate-400">${folderName}</span>
-    //                                             </p>
-    //                                         </div>
-    //                                         <a href="/user/${uploader}" class="flex items-center gap-0.5 shrink-0 bg-slate-50 dark:bg-slate-900/40 px-1 py-px rounded border border-slate-100 dark:border-slate-800/40 hover:border-nexus transition-all group/userlink">
-    //                                             <img src="${profilePic}" class="w-2.5 h-2.5 rounded object-cover" onerror="this.src='https://ui-avatars.com/api/?name=${uploader}&background=2563eb&color=fff';">
-    //                                             <span class="text-[7px] font-black text-nexus uppercase tracking-tight truncate max-w-[45px] group-hover/userlink:underline">${uploader}</span>
-    //                                         </a>
-    //                                     </div>
+            if (data.length === 0) {
+                hasMoreImages = false;
+                spinner.innerHTML = `<p class="text-[10px] font-black text-slate-300 uppercase tracking-widest">End of Gallery</p>`;
+            } else {
+                data.forEach(img => {
+                    const imgId = img._id && img._id.$oid ? img._id.$oid : img._id;
+                    const folderName = img.folder_name || 'General';
+                    const profilePic = img.profile_pic || '/static/images/avatars/default.png';
+                    const uploader = img.uploader || 'Unknown';
+                    
+                    const gridImage = img.thumb_url ? img.thumb_url : img.url;
+                    const fullImage = img.url;
 
-    //                                     <div class="grid grid-cols-4 gap-px bg-slate-100 dark:bg-slate-900 py-0.5 px-1 rounded-xl border border-slate-200 dark:border-slate-800 text-center shadow-inner my-px">
-    //                                         <div class="flex flex-col items-center justify-center text-center cursor-pointer group/like" onclick="likePhoto('${imgId}')">
-    //                                             <span class="text-[8.5px] filter drop-shadow-sm group-hover/like:scale-110 transition-transform">❤️</span>
-    //                                             <span id="likes-${imgId}" class="text-[7.5px] font-black text-slate-700 dark:text-slate-300 leading-none mt-0.5">${likes}</span>
-    //                                         </div>
-    //                                         <div class="flex flex-col items-center justify-center text-center cursor-pointer group/view" onclick="openImageLightbox('${img.url}', '${imgId}')">
-    //                                             <span class="text-[8.5px] filter drop-shadow-sm group-hover/view:scale-110 transition-transform">👁️</span>
-    //                                             <span id="views-${imgId}" class="text-[7.5px] font-black text-slate-700 dark:text-slate-300 leading-none mt-0.5">${views}</span>
-    //                                         </div>
-    //                                         <div class="flex flex-col items-center justify-center text-center cursor-pointer group/share" onclick="sharePhoto('${img.url}', '${imgId}')">
-    //                                             <span class="text-[8.5px] filter drop-shadow-sm group-hover/share:scale-110 transition-transform">🔗</span>
-    //                                             <span id="shares-${imgId}" class="text-[7.5px] font-black text-slate-700 dark:text-slate-300 leading-none mt-0.5">${shares}</span>
-    //                                         </div>
-    //                                         <a href="/download-image/${imgId}" class="flex flex-col items-center justify-center text-center group/down block decoration-none">
-    //                                             <span class="text-[8.5px] filter drop-shadow-sm group-hover/down:scale-110 transition-transform">📥</span>
-    //                                             <span id="downloads-${imgId}" class="text-[7.5px] font-black text-slate-700 dark:text-slate-300 leading-none mt-0.5">${downloads}</span>
-    //                                         </a>
-    //                                     </div>
+                    let tagsHtml = '';
+                    if (img.tags && img.tags.length > 0) {
+                        img.tags.slice(0, 4).forEach(tag => {
+                            tagsHtml += `<span class="text-[9px] font-black text-nexus bg-blue-50/40 dark:bg-blue-950/20 border border-blue-100/20 dark:border-blue-900/20 px-1.5 py-0.5 rounded uppercase tracking-tight">#${tag}</span>`;
+                        });
+                    } else {
+                        tagsHtml = `<span class="text-[9px] font-black text-slate-300 uppercase tracking-tight">#UNTAGGED</span>`;
+                    }
 
-    //                                     <div class="flex flex-wrap gap-0.5 pt-0 overflow-hidden truncate whitespace-nowrap">
-    //                                         ${tagsHtml}
-    //                                     </div>
-    //                                 </div>
-    //                             </div>
-    //                             `;
-    //                             gallery.insertAdjacentHTML('beforeend', imgHTML);
-    //                         });
-    //                         scrollPage++;
-    //                         if (loader) loader.classList.add('hidden');
-    //                     }
-    //                     isFetchingData = false;
-    //                 })
-    //                 .catch(err => {
-    //                     console.error("Infinite Scroll Error:", err);
-    //                     isFetchingData = false;
-    //                     if (loader) loader.classList.add('hidden');
-    //                 });
-    //         }
-    //     }
-    // });
+                    // 🔥 FULL CARD HTML (Like, View, Share, Download Sabke Sath)
+                    const cardHTML = `
+                    <div class="bg-white dark:bg-[#1E293B] rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden group hover:shadow-md transition-all duration-300 flex flex-col relative animate-fadeIn">
+                        <div class="absolute top-1.5 right-1.5 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur shadow-sm p-0.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-[9px]" onclick="event.stopPropagation();">⋮</div>
+
+                        <div class="aspect-square w-full max-h-[190px] overflow-hidden bg-slate-100 dark:bg-slate-900 relative flex-shrink-0 border-b border-slate-50 dark:border-slate-800/20">
+                            <img src="${gridImage}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="${img.filename}">
+                        </div>
+
+                        <div class="py-1.5 px-2 space-y-1 flex-1 flex flex-col justify-between bg-white dark:bg-[#1E293B]">
+                            <div class="flex items-center justify-between gap-1">
+                                <div class="flex items-center gap-0.5 min-w-0">
+                                    <span class="text-[8px]">📁</span>
+                                    <p class="text-[7.5px] font-black text-slate-400 uppercase tracking-wider truncate">
+                                        ROOM: <span class="text-slate-500 dark:text-slate-400">${folderName}</span>
+                                    </p>
+                                </div>
+                                <a href="/user/${uploader}" class="flex items-center gap-0.5 shrink-0 bg-slate-50 dark:bg-slate-900/40 px-1 py-px rounded border border-slate-100 dark:border-slate-800/40 hover:border-nexus transition-all group/userlink">
+                                    <img src="${profilePic}" class="w-2.5 h-2.5 rounded object-cover" onerror="this.src='https://ui-avatars.com/api/?name=${uploader}&background=2563eb&color=fff';">
+                                    <span class="text-[7px] font-black text-nexus uppercase tracking-tight truncate max-w-[45px] group-hover/userlink:underline">${uploader}</span>
+                                </a>
+                            </div>
+
+                            <div class="grid grid-cols-4 gap-px bg-slate-100 dark:bg-slate-900 py-0.5 px-1 rounded-xl border border-slate-200 dark:border-slate-800 text-center shadow-inner my-px">
+                                <div class="flex flex-col items-center justify-center text-center cursor-pointer group/like" onclick="likePhoto('${imgId}')">
+                                    <span class="text-[8.5px] filter drop-shadow-sm group-hover/like:scale-110 transition-transform">❤️</span>
+                                    <span id="likes-${imgId}" class="text-[7.5px] font-black text-slate-700 dark:text-slate-300 leading-none mt-0.5">${img.likes || 0}</span>
+                                </div>
+                                <div class="flex flex-col items-center justify-center text-center cursor-pointer group/view" onclick="openImageLightbox('${fullImage}', '${imgId}')">
+                                    <span class="text-[8.5px] filter drop-shadow-sm group-hover/view:scale-110 transition-transform">👁️</span>
+                                    <span id="views-${imgId}" class="text-[7.5px] font-black text-slate-700 dark:text-slate-300 leading-none mt-0.5">${img.views || 0}</span>
+                                </div>
+                                <div class="flex flex-col items-center justify-center text-center cursor-pointer group/share" onclick="sharePhoto('${fullImage}', '${imgId}')">
+                                    <span class="text-[8.5px] filter drop-shadow-sm group-hover/share:scale-110 transition-transform">🔗</span>
+                                    <span id="shares-${imgId}" class="text-[7.5px] font-black text-slate-700 dark:text-slate-300 leading-none mt-0.5">${img.shares || 0}</span>
+                                </div>
+                                <a href="/download-image/${imgId}" class="flex flex-col items-center justify-center text-center group/down block decoration-none">
+                                    <span class="text-[8.5px] filter drop-shadow-sm group-hover/down:scale-110 transition-transform">📥</span>
+                                    <span id="downloads-${imgId}" class="text-[7.5px] font-black text-slate-700 dark:text-slate-300 leading-none mt-0.5">${img.downloads || 0}</span>
+                                </a>
+                            </div>
+
+                            <div class="flex flex-wrap gap-0.5 pt-0 overflow-hidden truncate whitespace-nowrap">
+                                ${tagsHtml}
+                            </div>
+                        </div>
+                    </div>`;
+                    
+                    gallery.insertAdjacentHTML('beforeend', cardHTML);
+                });
+                scrollPage++;
+            }
+        } catch (err) {
+            console.error("Scroll Sync Error:", err);
+            spinner.innerHTML = `<p class="text-[10px] font-black text-rose-500 uppercase">Network Error</p>`;
+        } finally {
+            isFetching = false;
+            if (hasMoreImages) {
+                spinner.classList.add('hidden');
+                spinner.classList.remove('flex');
+            }
+        }
+    }
+});
+
 </script>
 
 <style>
@@ -690,397 +702,3 @@
     }
 </style>
 {% endblock %}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<!-- <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nexus Cloud | Object Storage</title>
-    <style>
-      :root {
-        --primary: #2563eb;
-        --success: #059669;
-        --error: #dc2626;
-      }
-      body {
-        font-family: "Inter", sans-serif;
-        background: #f8fafc;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 100vh;
-        margin: 0;
-      }
-      .container {
-        background: white;
-        padding: 2rem;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-        width: 100%;
-        max-width: 450px; /* Thoda wide kiya taaki image achhi dikhe */
-        text-align: center;
-      }
-      h1 {
-        color: #1e293b;
-        font-size: 1.5rem;
-        margin-bottom: 0.5rem;
-      }
-      p {
-        color: #64748b;
-        margin-bottom: 2rem;
-        font-size: 0.875rem;
-      }
-      .drop-zone {
-        border: 2px dashed #e2e8f0;
-        padding: 1.5rem;
-        border-radius: 8px;
-        margin-bottom: 1.5rem;
-      }
-      button {
-        background: var(--primary);
-        color: white;
-        border: none;
-        width: 100%;
-        padding: 0.75rem;
-        border-radius: 6px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: opacity 0.2s;
-      }
-      button:disabled {
-        opacity: 0.5;
-      }
-      #status {
-        margin-top: 1rem;
-        font-size: 0.875rem;
-        padding: 0.75rem;
-        border-radius: 6px;
-        display: none;
-      }
-      .success {
-        display: block !important;
-        background: #ecfdf5;
-        color: var(--success);
-      }
-      .error {
-        display: block !important;
-        background: #fef2f2;
-        color: var(--error);
-      }
-      /* Photo preview styling */
-      #preview-section img {
-        max-width: 100%;
-        border-radius: 10px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        margin-top: 10px;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <h1>Nexus Cloud</h1>
-      <p>Enterprise Object Management System</p>
-
-      <form id="uploadForm">
-        <div class="drop-zone">
-          <input type="file" id="imageInput" accept="image/*" required />
-        </div>
-        <button type="submit" id="btnText">Upload to S3</button>
-      </form>
-
-      <div id="status"></div>
-
-      <div id="preview-section" style="margin-top: 2rem; display: none">
-        <h3>Uploaded Object</h3>
-        <img id="uploaded-image" src="" alt="Preview" />
-      </div>
-
-      <div id="tags-section" style="margin-top: 2rem; display: none">
-        <h3>AI Generated Tags</h3>
-        <div
-          id="tags-container"
-          style="
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            justify-content: center;
-          "
-        ></div>
-      </div>
-    </div>
-
-    <script>
-      document.getElementById("uploadForm").onsubmit = async (e) => {
-        e.preventDefault();
-        const status = document.getElementById("status");
-        const btn = document.getElementById("btnText");
-        const fileInput = document.getElementById("imageInput");
-        const tagsSection = document.getElementById("tags-section");
-        const tagsContainer = document.getElementById("tags-container");
-
-        // YAHAN ADD KIYA: Preview elements variables
-        const previewSection = document.getElementById("preview-section");
-        const uploadedImg = document.getElementById("uploaded-image");
-
-        const formData = new FormData();
-        formData.append("image", fileInput.files[0]);
-
-        // Reset UI state
-        btn.disabled = true;
-        btn.innerText = "Analyzing with AI...";
-        status.className = "";
-        status.style.display = "block";
-        status.innerText = "Contacting AWS Infrastructure...";
-
-        // Hide previous results
-        tagsSection.style.display = "none";
-        previewSection.style.display = "none";
-        tagsContainer.innerHTML = "";
-
-        try {
-          const response = await fetch("/upload", {
-            method: "POST",
-            body: formData,
-          });
-          const result = await response.json();
-
-          if (result.status === "success") {
-            status.className = "success";
-            status.innerText = result.message;
-
-            // YAHAN ADD KIYA: Photo dikhane ka logic
-            if (result.url) {
-              uploadedImg.src = result.url;
-              previewSection.style.display = "block";
-            }
-
-            // AI tags dikhane ka logic
-            if (result.tags && result.tags.length > 0) {
-              tagsSection.style.display = "block";
-              result.tags.forEach((tag) => {
-                const tagSpan = document.createElement("span");
-                tagSpan.style =
-                  "background: #e2e8f0; color: #1e293b; padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 500;";
-                tagSpan.innerText = tag;
-                tagsContainer.appendChild(tagSpan);
-              });
-            }
-          } else {
-            status.className = "error";
-            status.innerText = "Error: " + result.message;
-          }
-        } catch (err) {
-          status.className = "error";
-          status.innerText = "Critical: Connection failed.";
-        } finally {
-          btn.disabled = false;
-          btn.innerText = "Upload to S3";
-        }
-      };
-    </>
-  </body>
-</html> -->
-
-<!-- <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nexus Cloud | Object Storage</title>
-    <style>
-      :root {
-        --primary: #2563eb;
-        --success: #059669;
-        --error: #dc2626;
-      }
-      body {
-        font-family: "Inter", sans-serif;
-        background: #f8fafc;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 100vh;
-        margin: 0;
-      }
-      .container {
-        background: white;
-        padding: 2rem;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-        width: 100%;
-        max-width: 400px;
-        text-align: center;
-      }
-      h1 {
-        color: #1e293b;
-        font-size: 1.5rem;
-        margin-bottom: 0.5rem;
-      }
-      p {
-        color: #64748b;
-        margin-bottom: 2rem;
-        font-size: 0.875rem;
-      }
-      .drop-zone {
-        border: 2px dashed #e2e8f0;
-        padding: 1.5rem;
-        border-radius: 8px;
-        margin-bottom: 1.5rem;
-      }
-      button {
-        background: var(--primary);
-        color: white;
-        border: none;
-        width: 100%;
-        padding: 0.75rem;
-        border-radius: 6px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: opacity 0.2s;
-      }
-      button:disabled {
-        opacity: 0.5;
-      }
-      #status {
-        margin-top: 1rem;
-        font-size: 0.875rem;
-        padding: 0.75rem;
-        border-radius: 6px;
-        display: none;
-      }
-      .success {
-        display: block !important;
-        background: #ecfdf5;
-        color: var(--success);
-      }
-      .error {
-        display: block !important;
-        background: #fef2f2;
-        color: var(--error);
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <h1>Nexus Cloud</h1>
-      <p>Enterprise Object Management System</p>
-      <form id="uploadForm">
-        <div class="drop-zone">
-          <input type="file" id="imageInput" accept="image/*" required />
-        </div>
-        <button type="submit" id="btnText">Upload to S3</button>
-      </form>
-      <div id="status"></div>
-      <div id="tags-section" style="margin-top: 2rem; display: none">
-        <h3>AI Generated Tags</h3>
-        <div
-          id="tags-container"
-          style="
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            justify-content: center;
-          "
-        ></div>
-      </div>
-    </div>
-
-    <script>
-      document.getElementById("uploadForm").onsubmit = async (e) => {
-        e.preventDefault();
-        const status = document.getElementById("status");
-        const btn = document.getElementById("btnText");
-        const fileInput = document.getElementById("imageInput");
-        const tagsSection = document.getElementById("tags-section");
-        const tagsContainer = document.getElementById("tags-container");
-
-        const formData = new FormData();
-        formData.append("image", fileInput.files[0]);
-
-        // Reset UI state
-        btn.disabled = true;
-        btn.innerText = "Analyzing with AI...";
-        status.className = "";
-        status.style.display = "block";
-        status.innerText = "Contacting AWS Infrastructure...";
-        tagsSection.style.display = "none";
-        tagsContainer.innerHTML = ""; // Clear old tags
-
-        try {
-          const response = await fetch("/upload", {
-            method: "POST",
-            body: formData,
-          });
-          const result = await response.json();
-
-          if (result.status === "success") {
-            status.className = "success";
-            status.innerText = result.message;
-
-            // AI tags dikhane ka logic
-            if (result.tags && result.tags.length > 0) {
-              tagsSection.style.display = "block";
-              result.tags.forEach((tag) => {
-                const tagSpan = document.createElement("span");
-                tagSpan.style =
-                  "background: #e2e8f0; color: #1e293b; padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 500;";
-                tagSpan.innerText = tag;
-                tagsContainer.appendChild(tagSpan);
-              });
-            }
-          } else {
-            status.className = "error";
-            status.innerText = "Error: " + result.message;
-          }
-        } catch (err) {
-          status.className = "error";
-          status.innerText = "Critical: Connection failed.";
-        } finally {
-          btn.disabled = false;
-          btn.innerText = "Upload to S3";
-        }
-      };
-    </script>
-  </body>
-</html> -->

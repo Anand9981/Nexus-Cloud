@@ -12,7 +12,6 @@
         </p>
     </div>
  
-    <!-- Deletion Pending Notification -->
     <div id="deletion-banner" class="{% if not current_user.is_scheduled_for_deletion %}hidden{% endif %} bg-gradient-to-r from-rose-50 to-orange-50 dark:from-rose-900/20 dark:to-orange-900/20 border border-rose-200 dark:border-rose-800 p-8 rounded-[2rem] mb-10 shadow-sm flex items-center justify-between">
         <div>
             <h3 class="text-xs font-black text-rose-600 dark:text-rose-400 uppercase tracking-[0.2em] mb-1">Account Deletion Scheduled</h3>
@@ -29,9 +28,22 @@
     <section class="bg-white dark:bg-[#1E293B] p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm space-y-8">
         <div class="flex flex-col sm:flex-row items-center gap-6">
             <img src="{{ current_user.profile_pic }}" class="w-24 h-24 rounded-3xl border-4 border-blue-50 shadow-xl object-cover" id="current-avatar-preview">
+            
             <div class="text-center sm:text-left space-y-1.5">
-                <h3 class="text-base font-black text-slate-800 dark:text-white uppercase tracking-tight">My Profile</h3>
-                <p class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Logged in as: <span class="text-nexus font-black">{{ current_user.username }}</span></p>
+                
+                <div class="text-center sm:text-left space-y-1.5">
+                    <h2 class="text-base font-black text-slate-800 dark:text-white uppercase tracking-tight">My Profile</h2>
+                </div>
+                <div class="flex items-center justify-center sm:justify-start gap-3">
+                    <h3 class="text-lg font-bold text-slate-600 dark:text-white">
+                        {{ current_user.username }}
+                    </h3>
+                    <button onclick="openUsernameModal()" class="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:bg-nexus hover:text-white transition-all shadow-sm" title="Edit Username">
+                        ✏️
+                    </button>
+                </div>
+        
+                <!-- <p class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Logged in as: <span class="text-nexus font-black">{{ current_user.username }}</span></p> -->
                 <p class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Member since: <span class="text-slate-600 dark:text-slate-300 font-bold">{{ current_user.created_at or '2026' }}</span></p>
             </div>
         </div>
@@ -131,19 +143,60 @@
     </section>
 
     <section class="bg-white dark:bg-[#1E293B] p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm space-y-6">
-        <h3 class="text-xs font-black text-slate-800 dark:text-white uppercase tracking-[0.2em]">Active Sessions</h3>
+        <div class="flex justify-between items-center">
+            <h3 class="text-xs font-black text-slate-800 dark:text-white uppercase tracking-[0.2em]">Active Sessions</h3>
+            <span class="text-[10px] font-bold text-nexus bg-nexus/10 px-3 py-1 rounded-lg">{{ user_sessions|length }} Connected</span>
+        </div>
+    
         <div class="space-y-3">
-            <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100">
-                <div class="flex items-center gap-3">
-                    <span class="text-lg">💻</span>
-                    <div>
-                        <p class="text-[10px] font-black text-slate-700 dark:text-slate-200">Chrome on Windows 11</p>
-                        <p class="text-[9px] text-slate-400">Last active: Just now</p>
+            {% for session in user_sessions %}
+                {% if session.session_token == current_token %}
+                <div class="flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100 dark:border-emerald-800/30">
+                    <div class="flex items-center gap-4">
+                        <span class="text-2xl">💻</span>
+                        <div>
+                            <p class="text-[11px] font-black text-slate-800 dark:text-emerald-500 uppercase tracking-wide">{{ session.device_info }}</p>
+                            <p class="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">IP: {{ session.ip_address }} • Current Device</p>
+                        </div>
                     </div>
+                    <span class="text-[9px] font-black text-emerald-600 bg-emerald-100 dark:bg-emerald-900/40 px-3 py-1 rounded-md uppercase tracking-widest">Active Now</span>
                 </div>
-                <span class="text-[9px] font-black text-green-500 uppercase">Current</span>
+                {% endif %}
+            {% endfor %}
+    
+            {% if user_sessions|length > 1 %}
+            <button onclick="document.getElementById('other-sessions').classList.toggle('hidden')" class="w-full text-center py-3 text-[10px] font-black text-slate-500 hover:text-nexus uppercase tracking-widest flex items-center justify-center gap-2 transition-colors cursor-pointer border border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
+                <span>View all Logged-in Devices</span>
+                <span class="text-xs">⬇️</span>
+            </button>
+            {% endif %}
+    
+            <div id="other-sessions" class="hidden space-y-3 mt-3 animate-fadeIn">
+                {% for session in user_sessions %}
+                    {% if session.session_token != current_token %}
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 gap-4" id="session-{{ session.session_token }}">
+                        <div class="flex items-center gap-4">
+                            <span class="text-2xl grayscale opacity-70">📱</span>
+                            <div>
+                                <p class="text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-wide">{{ session.device_info }}</p>
+                                <p class="text-[9px] font-bold text-slate-400 mt-0.5">IP: {{ session.ip_address }} • Tracked in System</p>
+                            </div>
+                        </div>
+                        <button onclick="revokeSession('{{ session.session_token }}')" class="bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white dark:bg-rose-900/20 dark:hover:bg-rose-600 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-sm">
+                            Remove Device
+                        </button>
+                    </div>
+                    {% endif %}
+                {% endfor %}
             </div>
         </div>
+        {% if user_sessions|length > 1 %}
+        <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50 flex justify-center w-full">
+            <button onclick="revokeAllSessions()" id="revoke-all-btn" class="bg-rose-500 hover:bg-rose-600 text-white px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-rose-500/20 flex items-center gap-2">
+                ⚠️ Logout All Other Devices
+            </button>
+        </div>
+        {% endif %}
     </section>
 
     <section class="bg-white dark:bg-[#1E293B] p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden relative">
@@ -199,7 +252,8 @@
             </div>
         </div>
     </div>
-    <section class="bg-white dark:bg-[#1E293B] p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm space-y-6">
+
+    <section class="bg-white dark:bg-[#1E293B] p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm space-y-6 mt-12">
         <h3 class="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">System Knowledge Base & Documentation</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
@@ -270,7 +324,7 @@ function checkDeletionChoice() {
         // CASE: User ne tick nahi kiya (Assets archive mein jayenge)
         const userConfirmed = confirm(
             "⚠️ Confirmation: You are about to transfer all assets to the Nexus System Archive. " +
-            "Please note that this action will permanently revoke your direct access to these data/assets. " +
+            "Please note that this action will permanently remove your direct access to these data/assets. " +
             "Do you wish to proceed?"
         );
         
@@ -306,7 +360,62 @@ async function cancelAccountDeletion() {
     function openDeleteModal() { toggleModal(true); }
     function closeDeleteModal() { toggleModal(false); }
 
-    // Days counter logic
+    // Username Modal and profile name changes
+    function openUsernameModal() {
+        const modal = document.getElementById('username-modal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+    
+    function closeUsernameModal() {
+        const modal = document.getElementById('username-modal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    async function saveNewUsername() {
+        const newName = document.getElementById('new-username-input').value.trim();
+        if (!newName) return;
+        
+        const btn = document.getElementById('save-username-btn');
+        const originalText = btn.innerText;
+        
+        // Loading State
+        btn.innerText = "Syncing Node...";
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+    
+        try {
+            const response = await fetch('/update-username', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ new_username: newName })
+            });
+            
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                // ✅ Success Notification
+                triggerSettingsToast('success', data.message);
+                closeUsernameModal();
+                setTimeout(() => { location.reload(); }, 1500); 
+            } else {
+                // ❌ Error Notification (Jaise: Name already taken)
+                triggerSettingsToast('error', data.message);
+                // Button ko wapas normal karein taaki user dusra naam try kar sake
+                btn.innerText = originalText;
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        } catch (err) {
+            console.error("Identity update failure:", err);
+            triggerSettingsToast('error', 'Critical Error: Network connection failed.');
+            btn.innerText = originalText;
+            btn.disabled = false;
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    }
+    
     // Days counter logic
 {% if current_user.is_scheduled_for_deletion and current_user.deletion_scheduled_at %}
     const expiryDate = new Date("{{ current_user.deletion_scheduled_at }}");
@@ -460,6 +569,83 @@ document.getElementById('internal-change-password-form').addEventListener('submi
         btn.classList.add('opacity-50', 'cursor-not-allowed');
     }
 
+    async function revokeSession(token) {
+        if(confirm("⚠️ SECURITY ALERT: Are you sure you want to log out this device remotely?")) {
+            const btn = document.querySelector(`#session-${token} button`);
+            const origText = btn.innerText;
+            btn.innerText = "Revoking...";
+            btn.disabled = true;
+    
+            try {
+                const res = await fetch(`/revoke-session/${token}`, { method: 'POST' });
+                const data = await res.json();
+                
+                if(data.status === 'success') {
+                    // UI se turant gayab karo
+                    document.getElementById(`session-${token}`).remove();
+                    triggerSettingsToast('success', 'Remote device logged out successfully.');
+                    
+                    // Agar aur koi device nahi bacha toh dropdown button chupa do
+                    const otherSessionsDiv = document.getElementById('other-sessions');
+                    if (otherSessionsDiv.children.length === 0) {
+                        otherSessionsDiv.previousElementSibling.remove(); 
+                    }
+                } else {
+                    triggerSettingsToast('error', 'Failed to remove session.');
+                    btn.innerText = origText;
+                    btn.disabled = false;
+                }
+            } catch(e) {
+                triggerSettingsToast('error', 'Network failure.');
+                btn.innerText = origText;
+                btn.disabled = false;
+            }
+        }
+    }
+
+    async function revokeAllSessions() {
+        // Double confirmation taaki galti se click na ho jaye
+        if(confirm("🚨 CRITICAL ALERT: Are you sure you want to forcefully log out ALL other devices? This action is irreversible.")) {
+            
+            const btn = document.getElementById('revoke-all-btn');
+            const origText = btn.innerHTML;
+            btn.innerText = "Removing All Connections...";
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+    
+            try {
+                const res = await fetch('/revoke-all-sessions', { method: 'POST' });
+                const data = await res.json();
+                
+                if(data.status === 'success') {
+                    triggerSettingsToast('success', data.message);
+                    
+                    // UI ko instantly clean kar do bina page refresh kiye
+                    const otherSessionsDiv = document.getElementById('other-sessions');
+                    const toggleBtn = otherSessionsDiv.previousElementSibling;
+                    
+                    otherSessionsDiv.remove(); // Saari devices ki list delete
+                    if(toggleBtn) toggleBtn.remove(); // Dropdown button delete
+                    
+                    // Top header mein count update kardo
+                    document.querySelector('.bg-nexus\\/10').innerText = '1 Connected';
+                    
+                } else {
+                    triggerSettingsToast('error', data.message);
+                    btn.innerHTML = origText;
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+            } catch(e) {
+                console.error(e);
+                triggerSettingsToast('error', 'Network Connection Failed.');
+                btn.innerHTML = origText;
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+    }
+
 </script>
 
 <style>
@@ -478,4 +664,25 @@ document.getElementById('internal-change-password-form').addEventListener('submi
 }
 
 </style>
+
+<div id="username-modal" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm transition-opacity">
+    <div class="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-700 transform scale-95 transition-transform animate-fadeIn">
+        
+        <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-nexus/10 text-nexus rounded-xl flex items-center justify-center text-xl">🔄</div>
+            <div>
+                <h3 class="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Sync New Identity</h3>
+                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Updates globally across all assets & folders</p>
+            </div>
+        </div>
+
+        <input type="text" id="new-username-input" value="{{ current_user.username }}" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-nexus focus:border-transparent mb-6 transition-all">
+        
+        <div class="flex justify-end gap-3">
+            <button onclick="closeUsernameModal()" class="px-5 py-2.5 text-xs font-black uppercase text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-all">Cancel</button>
+            <button id="save-username-btn" onclick="saveNewUsername()" class="px-5 py-2.5 text-xs font-black uppercase bg-nexus text-white rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 hover:-translate-y-0.5 transition-all">Authorize Update</button>
+        </div>
+    </div>
+</div>
+
 {% endblock %}

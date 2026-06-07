@@ -26,7 +26,9 @@
             <div class="absolute top-1.5 right-1.5 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur shadow-sm p-0.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-[9px]" onclick="event.stopPropagation();">⋮</div>
 
             <div class="aspect-square w-full max-h-[190px] overflow-hidden bg-slate-100 dark:bg-slate-900 relative flex-shrink-0 border-b border-slate-50 dark:border-slate-800/20">
-                <img src="{{ img.url }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 select-none" alt="{{ img.filename }}">
+                <!-- <img src="{{ img.url }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 select-none" alt="{{ img.filename }}"> -->
+                <!-- Thumbnail optimization If you want Quality then comment below line and uncomment above line -->
+                <img src="{{ img.thumb_url if img.thumb_url else img.url }}" onerror="this.src='{{ img.url }}'" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="{{ img.filename }}">
             </div>
 
             <div class="p-2 space-y-1 flex-1 flex flex-col justify-between bg-white dark:bg-[#1E293B]">

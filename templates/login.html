@@ -120,52 +120,110 @@
 </div>
 
 <script>
+    // NAYA IDEA: BRAHMASTRA FLAG (Logical Lock) 
+    let isLoginLocked = false;
+
     document.getElementById('loginForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        // alert("Form listener is active!"); // ADD THIS LINE        
+        
+        // 1. Agar gate pehle se lock hai, toh click ko ignore karo (Silent Drop)
+        if (isLoginLocked) {
+            console.log("Spam click blocked!");
+            return; 
+        }
+
         const passwordErrorNode = document.getElementById('password-error-node');
         const passwordErrorMessage = document.getElementById('password-error-message');
-        const formData = new FormData(this);
-        
+        const submitBtn = document.querySelector('button[type="submit"]');
+        const originalBtnText = submitBtn.innerHTML;
+
+        // 2. GATE TURANT LOCK KAR DO
+        isLoginLocked = true; 
+        submitBtn.disabled = true;
+        submitBtn.style.pointerEvents = "none"; // CSS level par mouse click band
+        submitBtn.innerHTML = "Authenticating... ⏳";
+        submitBtn.classList.add('opacity-80', 'cursor-not-allowed');
         passwordErrorNode.classList.add('hidden');
-        
+
+        const formData = new FormData(this);
+
         try {
             const response = await fetch('/login', {
                 method: 'POST',
                 body: formData
             });
-            
-            // 🔒 Case 1 intercept: Username missing (Response status 401 trigger)
+
+            // Wrong Username Check
             if (response.status === 401) {
                 const htmlResponse = await response.text();
-                document.open();
-                document.write(htmlResponse);
+                document.open(); 
+                document.write(htmlResponse); 
                 document.close();
                 return;
             }
-            //new added remove it if need
-            if (!response.ok) {
-                passwordErrorMessage.innerText = "Server connection failed. Check database IP settings.";
-                passwordErrorNode.classList.remove('hidden');
-                return; // Stop execution here
-            } //end new added
 
-            const result = await response.json();
-            
-            if (result.status === 'success') {
-                window.location.href = result.redirect_url;
-            } else if (result.status === 'password_error') {
-                // Case 2 intercept: Password mismatch
-                passwordErrorMessage.innerText = result.message;
-                passwordErrorNode.classList.remove('hidden');
-                
-                const passInput = document.getElementById('password');
-                passInput.focus();
-                passInput.classList.add('ring-2', 'ring-rose-500');
-                setTimeout(() => passInput.classList.remove('ring-rose-500'), 3000);
+            // 🚨 SECURITY SHIELD HIT (429 Rate Limit)
+            if (!response.ok) {
+                if (response.status === 429) {
+                    const errorData = await response.json();
+                    passwordErrorMessage.innerText = "⚠️ " + errorData.message;
+                    passwordErrorNode.classList.remove('hidden');
+                    
+                    // Button ko red kardo
+                    submitBtn.classList.add('bg-rose-600');
+                    submitBtn.classList.remove('bg-blue-600', 'hover:bg-blue-500');
+                    
+                    let timeLeft = 60; // 60 seconds lock
+                    const timer = setInterval(() => {
+                        submitBtn.innerText = `🔒 SYSTEM LOCKED (${timeLeft}s)`;
+                        timeLeft--;
+                        
+                        if (timeLeft < 0) {
+                            clearInterval(timer);
+                            // 3. TIMEOUT KE BAAD WAPAS UNLOCK KARO
+                            isLoginLocked = false; 
+                            submitBtn.disabled = false;
+                            submitBtn.style.pointerEvents = "auto";
+                            submitBtn.innerHTML = originalBtnText;
+                            submitBtn.classList.remove('opacity-80', 'cursor-not-allowed', 'bg-rose-600');
+                            submitBtn.classList.add('bg-blue-600', 'hover:bg-blue-500');
+                            passwordErrorNode.classList.add('hidden');
+                        }
+                    }, 1000);
+                    
+                    return; // YAHAN SE RETURN HUA TOH GATE LOCK HI RAHEGA
+                    
+                } else {
+                    passwordErrorMessage.innerText = "Server connection failed.";
+                    passwordErrorNode.classList.remove('hidden');
+                }
+            } else {
+                const result = await response.json();
+                if (result.status === 'success') {
+                    window.location.href = result.redirect_url;
+                    return;
+                } else if (result.status === 'password_error') {
+                    passwordErrorMessage.innerText = result.message;
+                    passwordErrorNode.classList.remove('hidden');
+                    const passInput = document.getElementById('password');
+                    passInput.focus();
+                }
             }
+
+            // 4. NORMAL ERROR (Jaise galat password) PAR UNLOCK KAR DO
+            isLoginLocked = false;
+            submitBtn.disabled = false;
+            submitBtn.style.pointerEvents = "auto";
+            submitBtn.innerHTML = originalBtnText;
+            submitBtn.classList.remove('opacity-80', 'cursor-not-allowed');
+
         } catch (err) {
-            console.error("Auth routing engine sync dropout:", err);
+            console.error("Error:", err);
+            isLoginLocked = false;
+            submitBtn.disabled = false;
+            submitBtn.style.pointerEvents = "auto";
+            submitBtn.innerHTML = originalBtnText;
+            submitBtn.classList.remove('opacity-80', 'cursor-not-allowed');
         }
     });
 
