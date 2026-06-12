@@ -11,7 +11,10 @@ import zipfile
 from flask import send_file
 from PIL import Image
 from io import BytesIO
+from bson import ObjectId
 from bson import json_util
+from flask import session
+from functools import wraps
 from user_agents import parse 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
 from dotenv import load_dotenv
@@ -674,6 +677,43 @@ def share_folder(folder_name):
     images = list(images_collection.find({"folder_name": folder_name, "is_public": True, "in_trash": False}))
     return render_template('index.html', images=images, folder_name=folder_name, is_shared_view=True)
 
+@app.route('/download-folder/<folder_name>')
+@login_required
+def download_folder_zip(folder_name):
+    # 1. Ensure karein ki user ke paas is folder ka access hai aur usme images hain
+    images = list(images_collection.find({
+        "folder_name": folder_name, 
+        "uploader": current_user.username, 
+        "in_trash": False
+    }))
+    
+    if not images:
+        flash("Folder is empty or not found.", "error")
+        return redirect(url_for('folder_view', name=folder_name))
+
+    # 2. GeeksforGeeks Standard: In-Memory ZIP Generation (Super Fast & Secure)
+    memory_file = BytesIO()
+    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for img in images:
+            try:
+                # S3 se image read karke seedha ZIP mein stream karein
+                s3_obj = s3_client.get_object(Bucket=BUCKET_NAME, Key=img['s3_key'])
+                file_bytes = s3_obj['Body'].read()
+                zf.writestr(img['filename'], file_bytes)
+            except Exception as e:
+                print(f"Error zipping {img['filename']}: {e}")
+    
+    memory_file.seek(0)
+    
+    # 3. User ko ZIP file as attachment bhejein
+    clean_folder_name = folder_name.replace(" ", "_")
+    return send_file(
+        memory_file,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=f"{clean_folder_name}_Nexus_Backup.zip"
+    )
+
 # ---------------------------------------------------
 # USER VAULT & PERSONAL FILES
 # ---------------------------------------------------
@@ -1059,7 +1099,9 @@ def execute_secure_reset():
         # 3. Password Update karo
         new_hashed_signature = generate_password_hash(new_password)
         users_collection.update_one({'_id': user['_id']}, {'$set': {'password': new_hashed_signature}})
-        
+        if email:
+            send_password_change_notification(email)
+            
         return jsonify({'status': 'success', 'message': 'Password updated successfully.'})
         
     except Exception as e:
@@ -1082,6 +1124,9 @@ def internal_change_password():
                 {'_id': ObjectId(current_user.id)},
                 {'$set': {'password': new_hashed_format}}
             )
+            if user_record.get('email'):
+                send_password_change_notification(user_record['email'])
+                
             return jsonify({'status': 'success', 'message': 'Master security credentials updated successfully.'})
         else:
             return jsonify({'status': 'error', 'message': 'The current password signature provided does not match.'}), 401
@@ -1093,14 +1138,65 @@ def internal_change_password():
 # ACCREDITATION RECOVERY TERMINAL (RESET PASSWORD UI LINK)
 # ---------------------------------------------------
 
-@app.route('/reset-password', methods=['GET'])
-def reset_password():
-    """Renders the fresh dynamic account recovery interface template cleanly"""
-    return render_template('reset_password.html')
+# @app.route('/reset-password', methods=['GET'])
+# def reset_password():
+#     """Renders the fresh dynamic account recovery interface template cleanly"""
+#     return render_template('reset_password.html')
 
-@app.route('/secure-reset', methods=['POST'])
-def secure_reset():
-    return redirect(url_for('index'))
+# @app.route('/secure-reset', methods=['POST'])
+# def secure_reset():
+#     return redirect(url_for('index'))
+
+@app.route('/reset-password', methods=['GET', 'POST'])
+def reset_password():
+    """Renders and processes the fresh dynamic account recovery interface template cleanly"""
+    if request.method == 'POST':
+        # Recovery phase data identification pipelines
+        email = session.get('reset_email') or request.form.get('email')
+        new_password = request.form.get('password')
+        
+        if email and new_password:
+            # 1. Generate standard security cryptographic hash
+            hashed_password = generate_password_hash(new_password)
+            
+            # 2. Complete DB modification update query safely
+            users_collection.update_one(
+                {"email": email},
+                {"$set": {"password": hashed_password}}
+            )
+            
+            # 3. Complete and rich customized professional template string
+            notify_subject = "Nexus Cloud: Security Password Reset Confirmed"
+            notify_html = f"""
+            <div style="font-family: 'Inter', Arial, sans-serif; max-width: 500px; margin: auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <span style="font-size: 40px;">🛡️</span>
+                </div>
+                <h2 style="color: #2563eb; text-align: center; margin-top: 0; font-weight: 800; text-transform: uppercase; letter-spacing: -0.5px;">Reset Successful</h2>
+                <p style="color: #334155; font-size: 14px; line-height: 1.6; margin-top: 20px;">Hello Explorer,</p>
+                <p style="color: #475569; font-size: 14px; line-height: 1.6;">The data account recovery pipeline for <strong>{email}</strong> has finalized successfully. Your temporary configuration hashes have been overwritten with your new secure access password.</p>
+                <p style="color: #64748b; font-size: 13px; line-height: 1.6; background: #fff7ed; padding: 12px; border-radius: 10px; border-left: 4px solid #f97316;">
+                    <strong>Verification Method:</strong> Identity Token Validation Pipeline<br>
+                    <strong>System Action:</strong> Old Credentials Revoked Automatically
+                </p>
+                <p style="color: #475569; font-size: 14px; line-height: 1.6;">You can now securely access your primary master directory parameters utilizing your freshly configured identity password.</p>
+                <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 25px 0;">
+                <p style="color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; text-align: center; margin-bottom: 0;">Monitored securely by,<br><strong>Nexus Cloud Core Matrix</strong></p>
+            </div>
+            """
+            # Deploy notification message package transmission
+            send_email(email, notify_subject, notify_html)
+            
+            # Clean backup recovery session blocks to keep layout safe
+            session.pop('reset_email', None)
+            
+            flash("Account access credentials restored successfully. Please sign in.", "success")
+            return redirect(url_for('login'))
+            
+        flash("System processing fault: Identity reference validation failed.", "error")
+        return redirect(url_for('reset_password'))
+
+    return render_template('reset_password.html')
 
 # ---------------------------------------------------
 # COMPREHENSIVE USER CONFIGURATION (SETTINGS SYSTEM)
@@ -1314,13 +1410,51 @@ def login():
             login_user(User(user_data))
             session_token = str(uuid.uuid4())
             
+            # 📱 NAYA DEVICE PARSING LOGIC START
             ua = parse(request.user_agent.string)
-            clean_device = f"{ua.browser.family} on {ua.os.family}" if ua.is_pc else f"{ua.browser.family} on {ua.device.family} ({ua.os.family})"
+            raw_ua = request.user_agent.string  # Browser ki raw string lenge
+
+            if ua.is_pc:
+                clean_device = f"{ua.browser.family} on {ua.os.family}"
+            elif ua.is_mobile or ua.is_tablet:
+                brand = str(ua.device.brand) if ua.device.brand else ""
+                model = str(ua.device.model) if ua.device.model else ""
+                family = str(ua.device.family) if ua.device.family else ""
+                
+                device_name = ""
+                
+                # Step 1: Agar Brand aur Model clear hai (e.g., Apple iPhone, Samsung SM-S928B)
+                if brand and model and brand.lower() not in ["none", "generic"]:
+                    device_name = f"{brand} {model}"
+                # Step 2: Agar Family name theek hai (e.g., Redmi Note 12)
+                elif family and family.lower() not in ["none", "generic smartphone", "generic", "other"]:
+                    device_name = family
+                    
+                # 🚀 Step 3: THE FIX - Agar system galti se sirf "K" ya chota naam pakad le
+                if len(device_name.strip()) <= 2:
+                    # Regex se raw data me se exact Android model chura lenge
+                    match = re.search(r'Android \d+[a-zA-Z0-9._]*; (?:[a-zA-Z]{2}-[a-zA-Z]{2}; )?([^;)]+)', raw_ua)
+                    if match:
+                        extracted = match.group(1).split('Build')[0].strip()
+                        if len(extracted) > 2:
+                            device_name = extracted
+                    
+                # Final Fallback agar browser ne bilkul hi model hide kar diya ho
+                if len(device_name.strip()) <= 2:
+                    device_name = f"{ua.os.family} Smartphone"
+                    
+                # Final Formatting (e.g., Chrome on Samsung SM-G998B (Android))
+                clean_device = f"{ua.browser.family} on {device_name}"
+                if ua.os.family and ua.os.family not in device_name:
+                    clean_device += f" ({ua.os.family})"
+            else:
+                clean_device = f"{ua.browser.family} on {ua.os.family}"
+            # 📱 NAYA DEVICE PARSING LOGIC END
             
             session_data = {
                 "user_id": user_data['_id'],
                 "session_token": session_token,
-                "device_info": clean_device,
+                "device_info": clean_device,  # Ye ab clean hoke aayega
                 "ip_address": request.remote_addr,
                 "last_active": datetime.utcnow()
             }
@@ -1341,42 +1475,63 @@ def login():
     return render_template('login.html')
 
 # @app.route('/login', methods=['GET', 'POST'])
-# @limiter.limit("3 per minute")
 # def login():
 #     if request.method == 'POST':
 #         try:
+#             client_ip = request.remote_addr or "127.0.0.1"
+            
+#             # 🛡️ 1. SHIELD CHECK (Sabse pehle check hoga)
+#             if check_security_limit(client_ip, "login", max_attempts=3, window_minutes=1):
+#                 return jsonify({
+#                     "status": "error", 
+#                     "message": "Security Shield Activated: Maximum attempt limit reached. Try again in 60 seconds."
+#                 }), 429
+
 #             input_username = request.form.get('username', '').strip()
 #             input_password = request.form.get('password', '')
             
 #             user_data = users_collection.find_one({"username": input_username})
             
 #             if not user_data:
+#                 log_failed_attempt(client_ip, "login")  # ❌ Galat Username par attempt log karo
 #                 return render_template('401.html', text_override="Requested profile ID is invalid..."), 401
                 
 #             if not check_password_hash(user_data['password'], input_password):
+#                 log_failed_attempt(client_ip, "login")  # ❌ Galat Password par attempt log karo
 #                 return jsonify({
 #                     'status': 'password_error', 
 #                     'message': 'Incorrect password signature. Please try again.'
 #                 })
                 
+#             # ✅ SUCCESS: Purane errors clear kardo
+#             clear_security_cache(client_ip, "login")
+            
 #             login_user(User(user_data))
 #             session_token = str(uuid.uuid4())
             
-#             # 1. User Agent ko parse karein
+#             # 📱 NAYA DEVICE PARSING LOGIC START
 #             ua = parse(request.user_agent.string)
-            
-#             # 2. Check karein ki user Mobile se hai ya Laptop/PC se
+
 #             if ua.is_pc:
-#                 # Laptop/PC ke liye sirf Browser aur OS
 #                 clean_device = f"{ua.browser.family} on {ua.os.family}"
+#             elif ua.is_mobile or ua.is_tablet:
+#                 # Mobile/Tablet ke case mein device brand nikalne ki koshish karein
+#                 device_brand = ua.device.brand if ua.device.brand else ua.device.family
+                
+#                 # Agar abhi bhi "Generic" hai, toh direct OS ka naam use karein (e.g., Android, iOS)
+#                 if "generic" in device_brand.lower() or "spider" in device_brand.lower():
+#                     clean_device = f"{ua.browser.family} on {ua.os.family} Mobile"
+#                 else:
+#                     clean_device = f"{ua.browser.family} on {device_brand} ({ua.os.family})"
 #             else:
-#                 # Mobile/Tablet ke liye Device ka Brand/Model bhi add karein
-#                 clean_device = f"{ua.browser.family} on {ua.device.family} ({ua.os.family})"
+#                 # Fallback agar kuch samajh na aaye
+#                 clean_device = f"{ua.browser.family} on {ua.os.family}"
+#             # 📱 NAYA DEVICE PARSING LOGIC END
             
 #             session_data = {
 #                 "user_id": user_data['_id'],
 #                 "session_token": session_token,
-#                 "device_info": clean_device,
+#                 "device_info": clean_device,  # Ye ab clean hoke aayega
 #                 "ip_address": request.remote_addr,
 #                 "last_active": datetime.utcnow()
 #             }
@@ -1387,93 +1542,113 @@ def login():
 #                 'redirect_url': url_for('index'),
 #                 'message': 'Master security authorization data metrics synchronized successfully.'
 #             })
-            
 #             response.set_cookie('nexus_session_token', session_token, httponly=True, secure=False)
 #             return response
             
 #         except Exception as e:
 #             print("LOGIN DATABASE TIMEOUT ERROR:", e)
-#             # Safely return JSON so the frontend doesn't freeze
-#             return jsonify({
-#                 'status': 'error', 
-#                 'message': 'Database connection failed. Please check backend logs.'
-#             }), 500
+#             return jsonify({'status': 'error', 'message': 'Database connection failed.'}), 500
             
 #     return render_template('login.html')
 
-# @app.route('/login', methods=['GET', 'POST'])
-# def login():
-#     if request.method == 'POST':
-#         input_username = request.form.get('username', '').strip()
-#         input_password = request.form.get('password', '')
-        
-#         user_data = users_collection.find_one({"username": input_username})
-        
-#         # 🛡️ CASE 1: UNIVERSAL IDENTITY INVALID
-#         if not user_data:
-#             return render_template('401.html', text_override="Requested profile ID is invalid. Please verify your identity name and try again."), 401
-            
-#         # 🛡️ CASE 2: IDENTITY IS VALID BUT PASSWORD SIGNATURE REJECTED
-#         if not check_password_hash(user_data['password'], input_password):
-#             return jsonify({
-#                 'status': 'password_error', 
-#                 'message': 'Incorrect password signature. Please try again.'
-#             })
-            
-#         # 🟢 CASE 3: ALL SIGNATURES REGISTERED SUCCESSFULLY
-#         login_user(User(user_data))
-        
-#         # 1. Generate Session Token for device tracking
-#         session_token = str(uuid.uuid4())
-        
-#         # 2. Store in Database session nodes
-#         ua = parse(request.user_agent.string)
-#         device_info = f"{ua.browser.family} on {ua.os.family}" # Result: "Chrome on Windows 11"
-        
-#         session_data = {
-#             "user_id": user_data['_id'],
-#             "session_token": session_token,
-#             "device_info": request.user_agent.string,
-#             "ip_address": request.remote_addr,
-#             "last_active": datetime.utcnow()
-#         }
-#         db.sessions.insert_one(session_data)
-        
-#         # 3. Construct Nexus Authenticated Response
-#         response = jsonify({
-#             'status': 'success', 
-#             'redirect_url': url_for('index'),
-#             'message': 'Master security authorization data metrics synchronized successfully.'
-#         })
-        
-#         # login route में यहाँ बदलाव करें:
-#         response.set_cookie('nexus_session_token', session_token, httponly=True, secure=False)
-        
-#         return response
-        
-#     return render_template('login.html')
-
-@app.route('/settings', methods=['GET'])
+@app.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
     user_data = users_collection.find_one({"_id": ObjectId(current_user.id)})
-    # Fetch all sessions for this user
+    
+    if request.method == 'POST':
+        new_password = request.form.get('new_password')
+        
+        if new_password:
+            # 1. New password ko securely hash karein
+            hashed_password = generate_password_hash(new_password)
+            
+            # 2. Database node par naya hash update karein
+            users_collection.update_one(
+                {"_id": ObjectId(current_user.id)},
+                {"$set": {"password": hashed_password}}
+            )
+            
+            # 3. Professional Professional Notification HTML Engine
+            user_email = user_data.get('email') or current_user.email
+            notify_subject = "Nexus Cloud: Password Changed Successfully"
+            notify_html = f"""
+            <div style="font-family: 'Inter', Arial, sans-serif; max-width: 500px; margin: auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <span style="font-size: 40px;">🔒</span>
+                </div>
+                <h2 style="color: #0f172a; text-align: center; margin-top: 0; font-weight: 800; text-transform: uppercase; letter-spacing: -0.5px;">Password Updated</h2>
+                <p style="color: #334155; font-size: 14px; line-height: 1.6; margin-top: 20px;">Hello <strong>{user_data.get('username', 'User')}</strong>,</p>
+                <p style="color: #475569; font-size: 14px; line-height: 1.6;">This is an automated security notification to confirm that the security access credentials for your Nexus Cloud account were successfully changed via the Profile Settings panel.</p>
+                <p style="color: #64748b; font-size: 13px; line-height: 1.6; background: #f8fafc; padding: 12px; border-radius: 10px; border-left: 4px solid #2563eb;">
+                    <strong>Status:</strong> Verification Complete<br>
+                    <strong>Location/Source:</strong> Account Security Panel
+                </p>
+                <p style="color: #475569; font-size: 14px; line-height: 1.6;">If you authorized this configuration change, your setup is complete and no further validation actions are required.</p>
+                <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 25px 0;">
+                <p style="color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; text-align: center; margin-bottom: 0;">Securely deployed by,<br><strong>Nexus Cloud Core Matrix</strong></p>
+            </div>
+            """
+            # Universal function deployment
+            send_email(user_email, notify_subject, notify_html)
+            
+            flash("Your profile security settings and password have been successfully compiled.", "success")
+            return redirect(url_for('settings'))
+            
+        flash("Password field cannot be empty.", "error")
+        return redirect(url_for('settings'))
+
+    # Fetch all active sessions for GET request layout
     user_sessions = list(db.sessions.find({"user_id": ObjectId(current_user.id)}))
     
     return render_template('settings.html', 
-                        blocked_tags=user_data.get('blocked_tags', []),
-                        user_sessions=user_sessions,
-                        current_token=request.cookies.get('nexus_session_token'))
+                            blocked_tags=user_data.get('blocked_tags', []),
+                            user_sessions=user_sessions,
+                            current_token=request.cookies.get('nexus_session_token'))
 
 @app.before_request
 def update_last_active():
+    if request.endpoint and 'static' in request.endpoint:
+        return
+
     if current_user.is_authenticated:
         token = request.cookies.get('nexus_session_token')
+        
         if token:
-            db.sessions.update_one(
-                {"session_token": token},
-                {"$set": {"last_active": datetime.utcnow()}}
-            )
+            now = datetime.utcnow()
+            last_checked_str = session.get('last_session_check')
+            
+            if last_checked_str:
+                try:
+                    last_checked_time = datetime.fromisoformat(last_checked_str)
+                    if (now - last_checked_time).total_seconds() < 240:
+                        return 
+                except ValueError:
+                    pass 
+
+            session_record = db.sessions.find_one({"session_token": token})
+            
+            if not session_record:
+                logout_user()
+                session.clear()
+            else:
+                db.sessions.update_one(
+                    {"session_token": token},
+                    {"$set": {"last_active": now}}
+                )
+                session['last_session_check'] = now.isoformat()
+        else:
+            logout_user()
+
+# @app.before_request
+# def update_last_active():
+#     if current_user.is_authenticated:
+#         token = request.cookies.get('nexus_session_token')
+#         if token:
+#             db.sessions.update_one(
+#                 {"session_token": token},
+#                 {"$set": {"last_active": datetime.utcnow()}}
+#             )
 
 @app.route('/logout')
 @login_required
@@ -1624,23 +1799,63 @@ def generate_share_link(folder_id):
     # 2. Privacy Check: Agar folder private hai, toh Email warning bhejo
     if not folder.get('is_public', False):
         try:
-            device_info = request.user_agent.string
-            current_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+            # 📱 NAYA DEVICE PARSING LOGIC START
+            ua = parse(request.user_agent.string)
+            raw_ua = request.user_agent.string
+
+            if ua.is_pc:
+                device_info = f"{ua.browser.family} on {ua.os.family}"
+            elif ua.is_mobile or ua.is_tablet:
+                brand = str(ua.device.brand) if ua.device.brand else ""
+                model = str(ua.device.model) if ua.device.model else ""
+                family = str(ua.device.family) if ua.device.family else ""
+                
+                device_name = ""
+                
+                # Step 1: Agar Brand aur Model clear hai
+                if brand and model and brand.lower() not in ["none", "generic"]:
+                    device_name = f"{brand} {model}"
+                # Step 2: Agar Family name theek hai
+                elif family and family.lower() not in ["none", "generic smartphone", "generic", "other"]:
+                    device_name = family
+                    
+                # 🚀 Step 3: THE FIX - Regex for Android hidden models
+                if len(device_name.strip()) <= 2:
+                    match = re.search(r'Android \d+[a-zA-Z0-9._]*; (?:[a-zA-Z]{2}-[a-zA-Z]{2}; )?([^;)]+)', raw_ua)
+                    if match:
+                        extracted = match.group(1).split('Build')[0].strip()
+                        if len(extracted) > 2:
+                            device_name = extracted
+                    
+                # Final Fallback
+                if len(device_name.strip()) <= 2:
+                    device_name = f"{ua.os.family} Smartphone"
+                    
+                device_info = f"{ua.browser.family} on {device_name}"
+                if ua.os.family and ua.os.family not in device_name:
+                    device_info += f" ({ua.os.family})"
+            else:
+                device_info = f"{ua.browser.family} on {ua.os.family}"
+            # 📱 NAYA DEVICE PARSING LOGIC END
+            
+            # IST (Indian Standard Time) calculate karna: UTC + 5:30 hours
+            ist_time = datetime.utcnow() + timedelta(hours=5, minutes=30)
+            current_time = ist_time.strftime("%B %d, %Y at %I:%M %p IST")
             
             subject = "⚠️ Security Alert: Private Folder Shared"
             body = f"""
-            Hello {current_user.username},
-            
-            A sharing link was generated for your PRIVATE folder '{folder['folder_name']}'.
-            
-            Time: {current_time}
-            Device: {device_info}
-            
-            If this was not you, please immediately secure your account.
-            
-            Regards,
-            Nexus Security Team
-            """
+Hello {current_user.username},
+
+A sharing link was generated for your PRIVATE folder '{folder['folder_name']}'.
+
+Time: {current_time}
+Device: {device_info}
+
+If this was not you, please immediately secure your account.
+
+Regards,
+Nexus Security Team
+"""
             
             dispatch_smtp_secure_email(current_user.email, current_user.username, subject, body)
         except Exception as e:
@@ -1668,6 +1883,68 @@ def generate_share_link(folder_id):
     # 7. Public link return karo
     share_url = url_for('access_shared_folder', token=token, _external=True)
     return jsonify({"status": "success", "share_url": share_url})
+
+# @app.route('/generate-share-link/<folder_id>', methods=['POST'])
+# @login_required
+# def generate_share_link(folder_id):
+#     data = request.get_json()
+#     password = data.get('password')
+    
+#     # 1. Folder check karo
+#     folder = folders_collection.find_one({"_id": ObjectId(folder_id), "owner": current_user.username})
+#     if not folder:
+#         return jsonify({"status": "error", "message": "Folder not found"}), 404
+
+#     # 2. Privacy Check: Agar folder private hai, toh Email warning bhejo
+#     if not folder.get('is_public', False):
+#         try:
+#             device_info = request.user_agent.string
+            
+#             # IST (Indian Standard Time) calculate karna: UTC + 5:30 hours
+#             ist_time = datetime.utcnow() + timedelta(hours=5, minutes=30)
+#             current_time = ist_time.strftime("%B %d, %Y at %I:%M %p IST")
+            
+#             subject = "⚠️ Security Alert: Private Folder Shared"
+#             body = f"""
+#             Hello {current_user.username},
+            
+#             A sharing link was generated for your PRIVATE folder '{folder['folder_name']}'.
+            
+#             Time: {current_time}
+#             Device: {device_info}
+            
+#             If this was not you, please immediately secure your account.
+            
+#             Regards,
+#             Nexus Security Team
+#             """
+            
+#             dispatch_smtp_secure_email(current_user.email, current_user.username, subject, body)
+#         except Exception as e:
+#             print(f"Non-fatal Email Error: {e}") # Yeh code ko crash nahi hone dega
+
+#     # 3. Password hash karo agar set kiya hai
+#     hashed_pw = generate_password_hash(password) if password else None
+    
+#     # 4. Logic: Agar password hai toh 48hr expiry (172800 sec), warna None (Permanent)
+#     expiry_time = 172800 if password else None 
+    
+#     # 5. Secure Token (Salted)
+#     token = s.dumps(str(folder_id), salt='folder-share-salt')
+    
+#     # 6. DB mein save karo (Token, Password aur Expiry)
+#     folders_collection.update_one(
+#         {"_id": ObjectId(folder_id)},
+#         {"$set": {
+#             "share_token": token,
+#             "share_password": hashed_pw,
+#             "expiry_in_seconds": expiry_time
+#         }}
+#     )
+    
+#     # 7. Public link return karo
+#     share_url = url_for('access_shared_folder', token=token, _external=True)
+#     return jsonify({"status": "success", "share_url": share_url})
 
 @app.route('/share/access/<token>', methods=['GET', 'POST'])
 def access_shared_folder(token):
@@ -1755,6 +2032,38 @@ def download_all_shared(token):
         download_name=f"{folder['folder_name']}_Nexus_Assets.zip"
     )
 
+def send_password_change_notification(user_email):
+    user_record = users_collection.find_one({"email": user_email})
+    username = user_record.get("username", "User") if user_record else "User"
+    
+    # IST (Indian Standard Time) calculate karna: UTC + 5:30 hours
+    ist_time = datetime.utcnow() + timedelta(hours=5, minutes=30)
+    
+    # Live date aur time format karna (IST mein)
+    current_date = ist_time.strftime("%B %d, %Y")
+    current_time = ist_time.strftime("%I:%M %p IST") 
+    
+    subject = "Security Notice: Your Nexus Cloud password was changed"
+    
+    body = f"""Hello {username},
+
+This is a confirmation that your password for Nexus Cloud was updated on {current_date} at {current_time}.
+
+If you made this change: No action is needed.
+
+If you did not authorize this change: Secure your account immediately by resetting your password on the login portal or contact our support team.
+
+For your security, always ensure you are accessing your account through official channels.
+
+Best regards,
+The Nexus Cloud Security Team
+"""
+    
+    try:
+        dispatch_smtp_secure_email(user_email, username, subject, body)
+    except Exception as e:
+        print(f"Notification Email Skipped: {e}")
+
 # @app.route('/debug-check')
 # def debug_check():
 #     try:
@@ -1840,10 +2149,6 @@ def download_all_shared(token):
             
 #     return f"Migration Completed! {count} thumbnails generated."
 #    ## http://127.0.0.1:5000/run-thumbnail-migration
-
-# if __name__ == '__main__':
-#     # host ko '0.0.0.0' karna zaroori hai
-#     app.run(host='0.0.0.0', port=5000, debug=True)
     
 if __name__ == '__main__':
     # Render ke dynamic port ko fetch karna (GeeksforGeeks standard practice)

@@ -20,7 +20,17 @@
                         {{ images|length }} Assets
                     </span>
                 </div>
-                <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mt-1 uppercase tracking-widest text-[10px]">Cloud Folder</p>
+                
+                <div class="flex items-center gap-2 mt-1.5">
+                    <p class="text-slate-500 dark:text-slate-400 text-sm font-medium uppercase tracking-widest text-[10px] m-0 leading-none">Cloud Folder</p>
+                    
+                    {% if images|length > 0 %}
+                    <a href="/download-folder/{{ folder_name|urlencode }}" title="Download Entire Folder as ZIP" 
+                       class="text-slate-400 hover:text-nexus text-sm transition-transform duration-300 transform hover:scale-150 active:scale-95 flex items-center justify-center leading-none cursor-pointer">
+                        📥
+                    </a>
+                    {% endif %}
+                </div>
             </div>
         </div>
         
