@@ -1244,32 +1244,92 @@ def request_account_deletion():
 # ---------------------------------------------------
 # SMTP EMAIL PIPELINE (Bina iske OTP nahi jayega)
 # ---------------------------------------------------
-def dispatch_smtp_secure_email(target_email, username, subject, body_content):
-    """Universal SMTP utility for all email types (OTP or Alerts)."""
-    try:
-        sender_identity = os.getenv('SMTP_SENDER')
-        smtp_app_secret = os.getenv('SMTP_PASSWORD')
-        
-        if not sender_identity or not smtp_app_secret:
-            raise Exception("SMTP credentials missing.")
+# ---------------------------------------------------
+# SMTP EMAIL PIPELINE (Async Threading Engine)
+# ---------------------------------------------------
+def send_async_email_worker(flask_app, target_email, subject, body_content):
+    """Background worker thread to execute secure cloud SMTP operations without blocking requests."""
+    with flask_app.app_context():
+        try:
+            sender_identity = os.getenv('SMTP_SENDER')
+            smtp_app_secret = os.getenv('SMTP_PASSWORD')
+            
+            if not sender_identity or not smtp_app_secret:
+                print("❌ [SMTP SHIELD] Aborted: Environmental credentials missing on Render.")
+                return
 
-        msg = MIMEMultipart()
-        msg['From'] = sender_identity
-        msg['To'] = target_email
-        msg['Subject'] = subject # Yahan dynamic subject aayega
+            msg = MIMEMultipart()
+            msg['From'] = sender_identity
+            msg['To'] = target_email
+            msg['Subject'] = subject
+            
+            # Check if body contains HTML tags for reset password view formatting layout
+            if "</div>" in body_content or "<div" in body_content:
+                msg.attach(MIMEText(body_content, 'html'))
+            else:
+                msg.attach(MIMEText(body_content, 'plain'))
+            
+            # Cloud hosting best practice: Try Port 465 SSL first as Port 587 TLS is heavily firewalled on Render
+            try:
+                server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10)
+                server.login(sender_identity, smtp_app_secret)
+                server.sendmail(sender_identity, target_email, msg.as_string())
+                server.quit()
+                print(f"✅ [ASYNC MAIL] Email successfully dispatched to {target_email} via Port 465 SSL")
+                return
+            except Exception as e465:
+                print(f"⚠️ Port 465 SSL initialization failed, trying backup Port 587: {e465}")
+                
+            # Secondary backup pipeline layout utilizing port 587 with strict short connection timeout
+            server = smtplib.SMTP('smtp.gmail.com', 587, timeout=10)
+            server.starttls()
+            server.login(sender_identity, smtp_app_secret)
+            server.sendmail(sender_identity, target_email, msg.as_string())
+            server.quit()
+            print(f"✅ [ASYNC MAIL] Email successfully dispatched to {target_email} via Port 587 TLS")
+            
+        except Exception as final_err:
+            print(f"❌ [ASYNC MAIL CRITICAL] Dropouts encountered during Render transport network lifecycle: {str(final_err)}")
+
+def dispatch_smtp_secure_email(target_email, username, subject, body_content):
+    """Universal Async SMTP utility to instantly release Flask threads and prevent Render client frontend timeouts."""
+    import threading
+    threading.Thread(
+        target=send_async_email_worker, 
+        args=(app, target_email, subject, body_content)
+    ).start()
+    return True
+
+def send_email(target_email, subject, body_content):
+    """🚨 CRITICAL NAME-ERROR ALIAS: Maps the missing function calls in reset_password route back to core engine safely."""
+    return dispatch_smtp_secure_email(target_email, "Explorer", subject, body_content)
+
+# def dispatch_smtp_secure_email(target_email, username, subject, body_content):
+#     """Universal SMTP utility for all email types (OTP or Alerts)."""
+#     try:
+#         sender_identity = os.getenv('SMTP_SENDER')
+#         smtp_app_secret = os.getenv('SMTP_PASSWORD')
         
-        msg.attach(MIMEText(body_content, 'plain'))
+#         if not sender_identity or not smtp_app_secret:
+#             raise Exception("SMTP credentials missing.")
+
+#         msg = MIMEMultipart()
+#         msg['From'] = sender_identity
+#         msg['To'] = target_email
+#         msg['Subject'] = subject # Yahan dynamic subject aayega
         
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(sender_identity, smtp_app_secret)
-        server.sendmail(sender_identity, target_email, msg.as_string())
-        server.quit()
-        print(f"✅ Email successfully dispatched to {target_email}")
+#         msg.attach(MIMEText(body_content, 'plain'))
         
-    except Exception as e:
-        print(f"❌ SMTP Error: {str(e)}")
-        raise Exception(f"SMTP Transmission Failed: {str(e)}")
+#         server = smtplib.SMTP('smtp.gmail.com', 587)
+#         server.starttls()
+#         server.login(sender_identity, smtp_app_secret)
+#         server.sendmail(sender_identity, target_email, msg.as_string())
+#         server.quit()
+#         print(f"✅ Email successfully dispatched to {target_email}")
+        
+#     except Exception as e:
+#         print(f"❌ SMTP Error: {str(e)}")
+#         raise Exception(f"SMTP Transmission Failed: {str(e)}")
 
 # ---------------------------------------------------
 # OTP RECOVERY ROUTE With Universal Email Dispatcher
