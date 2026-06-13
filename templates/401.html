@@ -26,7 +26,11 @@
         <div class="space-y-2">
             <h1 class="text-xl font-black text-slate-100 uppercase tracking-tight font-sans">ACCESS UNAUTHORIZED</h1>
             <p class="text-slate-400 text-[11px] font-medium uppercase tracking-wide leading-relaxed max-w-xs mx-auto">
-                Requested profile ID is invalid. Please verify your identity name and try again.
+                {% if text_override %}
+                    {{ text_override }}
+                {% else %}
+                    Requested profile ID is invalid. Please verify your identity name and try again.
+                {% endif %}
             </p>
         </div>
 

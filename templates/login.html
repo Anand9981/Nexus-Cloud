@@ -85,7 +85,7 @@
                 <div class="space-y-2">
                     <div class="flex justify-between items-center px-1">
                         <label class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Password</label>
-                        <a href="/reset-password" class="text-[10px] font-black text-blue-600 hover:underline tracking-tight">Forgot Token?</a>
+                        <a href="/reset-password" class="text-[10px] font-black text-blue-600 hover:underline tracking-tight">Forgot Password?</a>
                     </div>
                     <div class="relative">
                         <span class="absolute left-4 top-4 text-slate-400">🔑</span>
@@ -102,6 +102,15 @@
                             <span id="password-error-message">Incorrect password. Please try again.</span>
                         </p>
                     </div>
+                </div>
+
+                <div class="flex items-center justify-center gap-2 select-none my-5">
+                    <input type="checkbox" id="admin-clearance-toggle" value="true" 
+                           class="w-3.5 h-3.5 rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-700 bg-transparent cursor-pointer transition-all">
+                    <label for="admin-clearance-toggle" 
+                           class="text-slate-400 dark:text-slate-500 text-xs font-bold cursor-pointer hover:text-blue-500 dark:hover:text-blue-400 transition-colors select-none">
+                        Login as Admin
+                    </label>
                 </div>
 
                 <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg shadow-blue-500/20 hover:scale-[1.01] active:scale-95 transition-all cursor-pointer">
@@ -145,7 +154,13 @@
         submitBtn.classList.add('opacity-80', 'cursor-not-allowed');
         passwordErrorNode.classList.add('hidden');
 
+        // Form fields ka baseline data pack banao
         const formData = new FormData(this);
+
+        // 🔥 NAYA LOGIC ADDED HERE: Admin Toggle verification state inject karo
+        const adminToggle = document.getElementById('admin-clearance-toggle');
+        const isAdminLogin = adminToggle ? adminToggle.checked : false;
+        formData.append('login_as_admin', isAdminLogin ? 'true' : 'false');
 
         try {
             const response = await fetch('/login', {
@@ -162,53 +177,60 @@
                 return;
             }
 
-            // 🚨 SECURITY SHIELD HIT (429 Rate Limit)
-            if (!response.ok) {
-                if (response.status === 429) {
-                    const errorData = await response.json();
-                    passwordErrorMessage.innerText = "⚠️ " + errorData.message;
-                    passwordErrorNode.classList.remove('hidden');
+            // 🚨 SECURITY SHIELD HIT & ERRORS HANDLING OVERRIDE
+        if (!response.ok) {
+            if (response.status === 429) {
+                const errorData = await response.json();
+                passwordErrorMessage.innerText = "⚠️ " + errorData.message;
+                passwordErrorNode.classList.remove('hidden');
+                
+                // Button ko red kardo
+                submitBtn.classList.add('bg-rose-600');
+                submitBtn.classList.remove('bg-blue-600', 'hover:bg-blue-500');
+                
+                let timeLeft = 60; // 60 seconds lock
+                const timer = setInterval(() => {
+                    submitBtn.innerText = `🔒 SYSTEM LOCKED (${timeLeft}s)`;
+                    timeLeft--;
                     
-                    // Button ko red kardo
-                    submitBtn.classList.add('bg-rose-600');
-                    submitBtn.classList.remove('bg-blue-600', 'hover:bg-blue-500');
-                    
-                    let timeLeft = 60; // 60 seconds lock
-                    const timer = setInterval(() => {
-                        submitBtn.innerText = `🔒 SYSTEM LOCKED (${timeLeft}s)`;
-                        timeLeft--;
-                        
-                        if (timeLeft < 0) {
-                            clearInterval(timer);
-                            // 3. TIMEOUT KE BAAD WAPAS UNLOCK KARO
-                            isLoginLocked = false; 
-                            submitBtn.disabled = false;
-                            submitBtn.style.pointerEvents = "auto";
-                            submitBtn.innerHTML = originalBtnText;
-                            submitBtn.classList.remove('opacity-80', 'cursor-not-allowed', 'bg-rose-600');
-                            submitBtn.classList.add('bg-blue-600', 'hover:bg-blue-500');
-                            passwordErrorNode.classList.add('hidden');
-                        }
-                    }, 1000);
-                    
-                    return; // YAHAN SE RETURN HUA TOH GATE LOCK HI RAHEGA
-                    
-                } else {
-                    passwordErrorMessage.innerText = "Server connection failed.";
-                    passwordErrorNode.classList.remove('hidden');
-                }
-            } else {
-                const result = await response.json();
-                if (result.status === 'success') {
-                    window.location.href = result.redirect_url;
-                    return;
-                } else if (result.status === 'password_error') {
-                    passwordErrorMessage.innerText = result.message;
-                    passwordErrorNode.classList.remove('hidden');
-                    const passInput = document.getElementById('password');
-                    passInput.focus();
-                }
+                    if (timeLeft < 0) {
+                        clearInterval(timer);
+                        // TIMEOUT KE BAAD WAPAS UNLOCK KARO
+                        isLoginLocked = false; 
+                        submitBtn.disabled = false;
+                        submitBtn.style.pointerEvents = "auto";
+                        submitBtn.innerHTML = originalBtnText;
+                        submitBtn.classList.remove('opacity-80', 'cursor-not-allowed', 'bg-rose-600');
+                        submitBtn.classList.add('bg-blue-600', 'hover:bg-blue-500');
+                        passwordErrorNode.classList.add('hidden');
+                    }
+                }, 1000);
+        
+                return; // YAHAN SE RETURN HUA TOH GATE LOCK HI RAHEGA
+                
+            } 
+            // 🔥 THE FIX: Agar admin access reject ho (403), toh actual warning message screen pr dikhao
+            else if (response.status === 403) {
+                const errorData = await response.json();
+                passwordErrorMessage.innerText = "🚨 " + errorData.message;
+                passwordErrorNode.classList.remove('hidden');
+            } 
+            else {
+                passwordErrorMessage.innerText = "⚠️ Server connection failed.";
+                passwordErrorNode.classList.remove('hidden');
             }
+        } else {
+            const result = await response.json();
+            if (result.status === 'success') {
+                window.location.href = result.redirect_url;
+                return;
+            } else if (result.status === 'password_error') {
+                passwordErrorMessage.innerText = result.message;
+                passwordErrorNode.classList.remove('hidden');
+                const passInput = document.getElementById('password');
+                passInput.focus();
+            }
+        }
 
             // 4. NORMAL ERROR (Jaise galat password) PAR UNLOCK KAR DO
             isLoginLocked = false;

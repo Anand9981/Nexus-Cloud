@@ -96,6 +96,7 @@ db = client['NexusCloud_V2']
 images_collection = db['assets']
 users_collection = db['accounts']
 folders_collection = db['directories']
+moderation_rules_collection = db['moderation_rules']
 
 # --- Yahan add karo ---
 RECOVERY_OTP_CACHE = {} 
@@ -158,6 +159,8 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+DEFAULT_ADMINS = ["parmanandsahu2005@gmail.com", "nexuscloud.admin@gmail.com"]
+
 class User(UserMixin):
     def __init__(self, user_data):
         self.id = str(user_data['_id'])
@@ -166,6 +169,27 @@ class User(UserMixin):
         self.profile_pic = user_data.get('profile_pic', 'https://ui-avatars.com/api/?name=' + user_data['username'])
         self.is_scheduled_for_deletion = user_data.get('is_scheduled_for_deletion', False)
         self.deletion_scheduled_at = user_data.get('deletion_scheduled_at')
+        user_email_lower = user_data.get('email', '').strip().lower() if user_data.get('email') else ""
+        self.is_admin = user_data.get('is_admin', False) or (user_email_lower in DEFAULT_ADMINS)
+
+# 🛡️ ADMINISTRATIVE SECURITY SHIELD OVERRIDE
+def admin_required(f):
+    @wraps(f)
+    @login_required
+    def decorated_function(*args, **kwargs):
+        if not getattr(current_user, 'is_admin', False) or not session.get('is_admin_session'):
+            return render_template('404.html', text_override="Security Shield: Active administrative clearance token required for this session."), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
+# class User(UserMixin):
+#     def __init__(self, user_data):
+#         self.id = str(user_data['_id'])
+#         self.username = user_data['username']
+#         self.email = user_data.get('email')
+#         self.profile_pic = user_data.get('profile_pic', 'https://ui-avatars.com/api/?name=' + user_data['username'])
+#         self.is_scheduled_for_deletion = user_data.get('is_scheduled_for_deletion', False)
+#         self.deletion_scheduled_at = user_data.get('deletion_scheduled_at')
 
 
 @app.route('/test')
@@ -213,9 +237,23 @@ def index():
             "in_trash": {"$ne": True}, 
             "$or": [
                 {"is_public": True},
-                {"folder_name": {"$regex": "^General$", "$options": "i"}}
+                {
+                    "folder_name": {"$regex": "^General$", "$options": "i"}, 
+                    "is_public": {"$ne": False}  # Missing ya true chalega, bas explicitly False nahi hona chahiye
+                }
             ]
         }
+        # query = {
+        #     "in_trash": {"$ne": True}, 
+        #     "is_public": True
+        # }
+        # query = {
+        #     "in_trash": {"$ne": True}, 
+        #     "$or": [
+        #         {"is_public": True},
+        #         {"folder_name": {"$regex": "^General$", "$options": "i"}}
+        #     ]
+        # }
         
         # AI Search Filter
         if search_query:
@@ -297,9 +335,23 @@ def load_more():
             "in_trash": {"$ne": True}, 
             "$or": [
                 {"is_public": True},
-                {"folder_name": {"$regex": "^General$", "$options": "i"}}
+                {
+                    "folder_name": {"$regex": "^General$", "$options": "i"}, 
+                    "is_public": {"$ne": False}
+                }
             ]
         }
+        # query = {
+        #     "in_trash": {"$ne": True}, 
+        #     "is_public": True
+        # }
+        # query = {
+        #     "in_trash": {"$ne": True}, 
+        #     "$or": [
+        #         {"is_public": True},
+        #         {"folder_name": {"$regex": "^General$", "$options": "i"}}
+        #     ]
+        # }
         
         if search_query:
             safe_query = re.escape(search_query)
@@ -346,11 +398,15 @@ def search():
     if not query: return redirect(url_for('index'))
 
     # 1. Search Filters Logic (अब Public OR General फोल्डर दोनों की इमेजेज सर्च होंगी)
+    # Search filter legacy override control matrix
     search_filter = {
         "in_trash": False,
         "$or": [
-            {"is_public": True},          # कंडीशन 1: इमेज पब्लिक हो
-            {"folder_name": "General"}   # कंडीशन 2: या फिर General फोल्डर की हो
+            {"is_public": True},
+            {
+                "folder_name": {"$regex": "^General$", "$options": "i"}, 
+                "is_public": {"$ne": False}
+            }
         ],
         "$and": [
             {
@@ -361,6 +417,33 @@ def search():
             }
         ]
     }
+    # search_filter = {
+    #     "in_trash": False,
+    #     "is_public": True,
+    #     "$and": [
+    #         {
+    #             "$or": [
+    #                 {"tags": {"$regex": query, "$options": "i"}},
+    #                 {"filename": {"$regex": query, "$options": "i"}}
+    #             ]
+    #         }
+    #     ]
+    # }
+    # search_filter = {
+    #     "in_trash": False,
+    #     "$or": [
+    #         {"is_public": True},          # कंडीशन 1: इमेज पब्लिक हो
+    #         {"folder_name": "General"}   # कंडीशन 2: या फिर General फोल्डर की हो
+    #     ],
+    #     "$and": [
+    #         {
+    #             "$or": [
+    #                 {"tags": {"$regex": query, "$options": "i"}},
+    #                 {"filename": {"$regex": query, "$options": "i"}}
+    #             ]
+    #         }
+    #     ]
+    # }
     
     if current_user.is_authenticated:
         user_profile = users_collection.find_one({"_id": ObjectId(current_user.id)})
@@ -457,10 +540,30 @@ def upload():
         return jsonify({"status": "error", "message": "Selection Required"}), 400
 
     files = request.files.getlist('image')
+    
+    # ✅ FIX 1: Blank submit interception check (Empty selections handling)
+    valid_files_to_process = [f for f in files if f.filename != '']
+    if not valid_files_to_process:
+        return jsonify({"status": "error", "message": "No valid files selected for upload."}), 400
+
     selected_folder = request.form.get('folder_name', 'General')
     manual_tags = request.form.get('manual_tags', '').split(',')
     uploader = current_user.username if current_user.is_authenticated else "Guest"
     
+    # 🛡️ DYNAMIC AWS REKOGNITION SHIELD ENGINE: Pulling rules straight from Database Core
+    active_rules_docs = list(moderation_rules_collection.find({}))
+    BLOCKED_SAFETY_LABELS = set(rule['label'].lower().strip() for rule in active_rules_docs)
+
+    # Fallback auto-seeding agar database rules index completely empty ho (For first boot runtime safety)
+    if not BLOCKED_SAFETY_LABELS:
+        default_seeding_labels = ['gun', 'weapon', 'weaponry', 'firearm', 'pistol', 'rifle', 'hand grenade', 'grenade', 'explosive', 'bomb', 'knife', 'dagger', 'ammunition', 'violence', 'gore']
+        for lbl in default_seeding_labels:
+            moderation_rules_collection.insert_one({"label": lbl, "created_at": datetime.utcnow()})
+        BLOCKED_SAFETY_LABELS = set(default_seeding_labels)
+
+    uploaded_files = []
+    blocked_files = []
+
     try:
         # --- FOLDER PRIVACY CHECK ---
         is_public_flag = False
@@ -473,80 +576,259 @@ def upload():
             })
             is_public_flag = folder_doc.get('is_public', False) if folder_doc else False
 
-        # --- PROCESS & UPLOAD FILES (Original + Compressed) ---
-        for file in files:
-            if file and file.filename != '':
-                orig_name = secure_filename(file.filename)
-                filename = f"{datetime.now().timestamp()}_{orig_name}"
-                thumb_filename = f"thumb_{filename}" # Thumbnail ka naya naam
+        # --- PROCESS & UPLOAD FILES (With Dynamic Content Moderation Filter) ---
+        for file in valid_files_to_process:
+            orig_name = secure_filename(file.filename)
+            filename = f"{datetime.now().timestamp()}_{orig_name}"
+            thumb_filename = f"thumb_{filename}"
+            
+            # 1. File ko memory mein read karein
+            file_bytes = file.read()
+            
+            # 2. Temporary Upload Original to S3 (Taki AI scan complete kar sake)
+            s3_client.put_object(
+                Bucket=BUCKET_NAME,
+                Key=filename,
+                Body=file_bytes,
+                ContentType=file.content_type
+            )
+            
+            # 3. AWS Rekognition AI Tags Analysis Core Protocol
+            rek_response = rek_client.detect_labels(
+                Image={'S3Object': {'Bucket': BUCKET_NAME, 'Name': filename}}, 
+                MaxLabels=15
+            )
+            
+            ai_tags = [label['Name'].lower() for label in rek_response['Labels']]
+            
+            # 🚨 DYNAMIC SHIELD EVALUATOR: Checking parameters inside active rules data matrix
+            is_unsafe = False
+            detected_threats = []
+            
+            for label in rek_response['Labels']:
+                label_name = label['Name'].lower()
+                parents = [p['Name'].lower() for p in label.get('Parents', [])]
                 
-                # 1. File ko memory mein read karein
-                file_bytes = file.read()
+                # Check validation over dynamically declared keys array
+                if label_name in BLOCKED_SAFETY_LABELS or any(p in BLOCKED_SAFETY_LABELS for p in parents):
+                    is_unsafe = True
+                    detected_threats.append(label['Name'])
+            
+            # 🚫 PURGE INTERCEPT ACTION: Target threat verified, trigger instantaneous cloud destruction
+            if is_unsafe:
+                s3_client.delete_object(Bucket=BUCKET_NAME, Key=filename)
+                blocked_files.append(f"{orig_name} (Detected: {', '.join(set(detected_threats))})")
+                continue # Skip process array loop segment moving safely forward
+            
+            # 4. Create & Upload Thumbnail (~50KB for Grid layout)
+            try:
+                img = Image.open(BytesIO(file_bytes))
+                if img.mode in ("RGBA", "P"): 
+                    img = img.convert("RGB")
                 
-                # 2. Upload Original to S3 (High Quality for Lightbox)
+                img.thumbnail((600, 600)) 
+                
+                thumb_io = BytesIO()
+                img.save(thumb_io, format='JPEG', quality=60)
+                thumb_io.seek(0)
+                
                 s3_client.put_object(
                     Bucket=BUCKET_NAME,
-                    Key=filename,
-                    Body=file_bytes,
-                    ContentType=file.content_type
+                    Key=thumb_filename,
+                    Body=thumb_io.getvalue(),
+                    ContentType='image/jpeg'
                 )
-                
-                # 3. Create & Upload Thumbnail (~50KB for Grid)
-                try:
-                    img = Image.open(BytesIO(file_bytes))
-                    # Agar PNG (Transparent) hai toh usko JPEG mein convert karne ke liye RGB karein
-                    if img.mode in ("RGBA", "P"): 
-                        img = img.convert("RGB")
-                    
-                    # Image ko chhota karein (Aspect ratio barkarar rahega)
-                    img.thumbnail((600, 600)) 
-                    
-                    thumb_io = BytesIO()
-                    img.save(thumb_io, format='JPEG', quality=60) # 60% Quality par compress karein
-                    thumb_io.seek(0)
-                    
-                    # S3 par thumbnail bhejein
-                    s3_client.put_object(
-                        Bucket=BUCKET_NAME,
-                        Key=thumb_filename,
-                        Body=thumb_io.getvalue(),
-                        ContentType='image/jpeg'
-                    )
-                except Exception as e:
-                    print(f"Thumbnail processing error: {e}")
-                    thumb_filename = filename # Agar compress fail ho, toh original dikhayenge
-                
-                # 4. AWS Rekognition AI Tags (Original file se AI check karega)
-                rek_response = rek_client.detect_labels(
-                    Image={'S3Object': {'Bucket': BUCKET_NAME, 'Name': filename}}, 
-                    MaxLabels=10
-                )
-                ai_tags = [label['Name'].lower() for label in rek_response['Labels']]
-                final_tags = list(set(ai_tags + [t.strip().lower() for t in manual_tags if t.strip()]))
-                
-                # 5. Database mein dono URLs save karein
-                original_url = f"https://{BUCKET_NAME}.s3.{REGION}.amazonaws.com/{filename}"
-                thumb_url = f"https://{BUCKET_NAME}.s3.{REGION}.amazonaws.com/{thumb_filename}"
-                
-                images_collection.insert_one({
-                    "filename": orig_name, 
-                    "s3_key": filename, 
-                    "url": original_url,          # Yeh Lightbox / Eye-click par khulegi
-                    "thumb_url": thumb_url,       # Yeh Gallery grid mein dikhegi
-                    "tags": final_tags,
-                    "uploader": uploader, 
-                    "folder_name": selected_folder,
-                    "views": 0, "likes": 0, "shares": 0, "downloads": 0, 
-                    "is_favorite": False, "in_trash": False, 
-                    "uploaded_at": datetime.utcnow(), 
-                    "is_public": is_public_flag
-                })
+            except Exception as e:
+                print(f"Thumbnail processing error: {e}")
+                thumb_filename = filename
+            
+            final_tags = list(set(ai_tags + [t.strip().lower() for t in manual_tags if t.strip()]))
+            original_url = f"https://{BUCKET_NAME}.s3.{REGION}.amazonaws.com/{filename}"
+            thumb_url = f"https://{BUCKET_NAME}.s3.{REGION}.amazonaws.com/{thumb_filename}"
+            
+            # 5. Save to Database Node
+            images_collection.insert_one({
+                "filename": orig_name, 
+                "s3_key": filename, 
+                "url": original_url,          
+                "thumb_url": thumb_url,       
+                "tags": final_tags,
+                "uploader": uploader, 
+                "folder_name": selected_folder,
+                "views": 0, "likes": 0, "shares": 0, "downloads": 0, 
+                "is_favorite": False, "in_trash": False, 
+                "uploaded_at": datetime.utcnow(), 
+                "is_public": is_public_flag
+            })
+            uploaded_files.append(orig_name)
 
-        return jsonify({"status": "success", "message": "Assets Compressed & Synchronized"})
+        # --- DYNAMIC RESPONSE GATEWAY EVALUATION ---
+        if len(blocked_files) == len(valid_files_to_process) and len(valid_files_to_process) > 0:
+            return jsonify({
+                "status": "safety_error",
+                "message": f"🚨 Upload restricted: Selected files violate our platform safety guidelines. {', '.join(blocked_files)}."
+            }), 400
+            
+        elif len(blocked_files) > 0:
+            return jsonify({
+                "status": "partial_success",
+                "message": f"⚠️ Partial Sync: {len(uploaded_files)} files uploaded successfully. While, {len(blocked_files)} files violating content policy were restricted. {', '.join(blocked_files)}."
+            })
+            
+        else:
+            return jsonify({"status": "success", "message": "Assets Compressed & Synchronized"})
     
     except Exception as e:
         print(f"Upload Matrix Error: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": f"Operational pipeline fallout: {str(e)}"}), 500
+
+# @app.route('/upload', methods=['POST'])
+# def upload():
+#     if 'image' not in request.files:
+#         return jsonify({"status": "error", "message": "Selection Required"}), 400
+
+#     files = request.files.getlist('image')
+    
+#     # ✅ FIX 1: Blank submit interception check (Empty selections handling)
+#     valid_files_to_process = [f for f in files if f.filename != '']
+#     if not valid_files_to_process:
+#         return jsonify({"status": "error", "message": "No valid files selected for upload."}), 400
+
+#     selected_folder = request.form.get('folder_name', 'General')
+#     manual_tags = request.form.get('manual_tags', '').split(',')
+#     uploader = current_user.username if current_user.is_authenticated else "Guest"
+    
+#     # 🛡️ AWS REKOGNITION RESTRICTED SAFETY LABELS MATRIX (Stealth Content Blocker)
+#     BLOCKED_SAFETY_LABELS = {
+#         'gun', 'weapon', 'weaponry', 'firearm', 'pistol', 'rifle', 'hand grenade', 
+#         'grenade', 'explosive', 'bomb', 'knife', 'dagger', 'ammunition', 'violence', 'gore'
+#     }
+
+#     uploaded_files = []
+#     blocked_files = []
+
+#     try:
+#         # --- FOLDER PRIVACY CHECK ---
+#         is_public_flag = False
+#         if selected_folder.lower() == 'general':
+#             is_public_flag = True  
+#         elif current_user.is_authenticated:
+#             folder_doc = folders_collection.find_one({
+#                 "folder_name": selected_folder, 
+#                 "owner": current_user.username
+#             })
+#             is_public_flag = folder_doc.get('is_public', False) if folder_doc else False
+
+#         # --- PROCESS & UPLOAD FILES (With Live Content Moderation Filter) ---
+#         for file in valid_files_to_process:
+#             orig_name = secure_filename(file.filename)
+#             filename = f"{datetime.now().timestamp()}_{orig_name}"
+#             thumb_filename = f"thumb_{filename}"
+            
+#             # 1. File ko memory mein read karein
+#             file_bytes = file.read()
+            
+#             # 2. Temporary Upload Original to S3 (Taki AI ise scan kar sake)
+#             s3_client.put_object(
+#                 Bucket=BUCKET_NAME,
+#                 Key=filename,
+#                 Body=file_bytes,
+#                 ContentType=file.content_type
+#             )
+            
+#             # 3. AWS Rekognition AI Tags (Original file se AI check karega)
+#             rek_response = rek_client.detect_labels(
+#                 Image={'S3Object': {'Bucket': BUCKET_NAME, 'Name': filename}}, 
+#                 MaxLabels=15
+#             )
+            
+#             ai_tags = [label['Name'].lower() for label in rek_response['Labels']]
+            
+#             # 🚨 SECURITY SHIELD: Check violations inside labels or parent categories hierarchy
+#             is_unsafe = False
+#             detected_threats = []
+            
+#             for label in rek_response['Labels']:
+#                 label_name = label['Name'].lower()
+#                 parents = [p['Name'].lower() for p in label.get('Parents', [])]
+                
+#                 # Agar label ya uska koi parent blocked list mein hai, toh block trigger hoga
+#                 if label_name in BLOCKED_SAFETY_LABELS or any(p in BLOCKED_SAFETY_LABELS for p in parents):
+#                     is_unsafe = True
+#                     detected_threats.append(label['Name'])
+            
+#             # 🚫 ACTION: Agar photo unsafe hai, to turant S3 cloud se purge (delete) kardo
+#             if is_unsafe:
+#                 s3_client.delete_object(Bucket=BUCKET_NAME, Key=filename)
+#                 blocked_files.append(f"{orig_name} (Detected: {', '.join(set(detected_threats))})")
+#                 continue # Loop ko yahin se skip karke agli safe photo par jao
+            
+#             # 4. Create & Upload Thumbnail (~50KB for Grid)
+#             try:
+#                 img = Image.open(BytesIO(file_bytes))
+#                 if img.mode in ("RGBA", "P"): 
+#                     img = img.convert("RGB")
+                
+#                 img.thumbnail((600, 600)) 
+                
+#                 thumb_io = BytesIO()
+#                 img.save(thumb_io, format='JPEG', quality=60)
+#                 thumb_io.seek(0)
+                
+#                 s3_client.put_object(
+#                     Bucket=BUCKET_NAME,
+#                     Key=thumb_filename,
+#                     Body=thumb_io.getvalue(),
+#                     ContentType='image/jpeg'
+#                 )
+#             except Exception as e:
+#                 print(f"Thumbnail processing error: {e}")
+#                 thumb_filename = filename # Fallback to original if compression fails
+            
+#             # Merge AI tags with manual input tags smoothly
+#             final_tags = list(set(ai_tags + [t.strip().lower() for t in manual_tags if t.strip()]))
+            
+#             original_url = f"https://{BUCKET_NAME}.s3.{REGION}.amazonaws.com/{filename}"
+#             thumb_url = f"https://{BUCKET_NAME}.s3.{REGION}.amazonaws.com/{thumb_filename}"
+            
+#             # 5. Database mein exact original schema parameters save karein
+#             images_collection.insert_one({
+#                 "filename": orig_name, 
+#                 "s3_key": filename, 
+#                 "url": original_url,          
+#                 "thumb_url": thumb_url,       
+#                 "tags": final_tags,
+#                 "uploader": uploader, 
+#                 "folder_name": selected_folder,
+#                 "views": 0, "likes": 0, "shares": 0, "downloads": 0, 
+#                 "is_favorite": False, "in_trash": False, 
+#                 "uploaded_at": datetime.utcnow(), 
+#                 "is_public": is_public_flag
+#             })
+#             uploaded_files.append(orig_name)
+
+#         # --- DYNAMIC MULTI-CASE RESPONSE EVALUATION ---
+#         # Case A: Agar saari ki saari images policy violate kar gayi hon
+#         if len(blocked_files) == len(valid_files_to_process) and len(valid_files_to_process) > 0:
+#             return jsonify({
+#                 "status": "safety_error",
+#                 "message": f"🚨 Upload Denied: Content moderation shield blocked all assets due to security policy violations. Restricted weapons or violence data layout elements detected: {', '.join(blocked_files)}."
+#             }), 400
+            
+#         # Case B: Partial Success (Kuch upload hui, kuch block hui)
+#         elif len(blocked_files) > 0:
+#             return jsonify({
+#                 "status": "partial_success",
+#                 "message": f"⚠️ Partial Sync Complete: {len(uploaded_files)} assets synchronized successfully. However, {len(blocked_files)} assets were filtered and purged by security shield due to safety violations: {', '.join(blocked_files)}."
+#             })
+            
+#         # Case C: 100% Normal Full Success (Saari photos clean hain)
+#         else:
+#             return jsonify({"status": "success", "message": "Assets Compressed & Synchronized"})
+    
+#     except Exception as e:
+#         print(f"Upload Matrix Error: {e}")
+#         return jsonify({"status": "error", "message": f"Operational pipeline fallout: {str(e)}"}), 500
 
 @app.route('/create-folder', methods=['POST'])
 @login_required
@@ -1010,9 +1292,8 @@ def send_recovery_otp():
     # 1. User Validation
     user = users_collection.find_one({'username': username, 'email': email})
     if not user:
-        # Yahan log_failed_attempt sahi hai kyunki yeh actual failure hai
         log_failed_attempt(client_ip, "otp")
-        return jsonify({'status': 'error', 'message': 'Account validation failed. Identity not registered.'}), 404
+        return jsonify({'status': 'error', 'message': 'Account validation failed: This identity profile is not registered.'}), 401
         
     generated_token = str(random.randint(100000, 999999))
     
@@ -1059,7 +1340,7 @@ def execute_secure_reset():
         
         user = users_collection.find_one({'username': username, 'email': email})
         if not user:
-            return jsonify({'status': 'error', 'message': 'Identity not found.'}), 404
+            return jsonify({'status': 'error', 'message': 'Identity verification failed. Registered parameters do not match.'}), 401
 
         # 2. MODE-BASED VALIDATION LOGIC
         if mode == 'OTP':
@@ -1407,6 +1688,23 @@ def login():
             # ✅ SUCCESS: Purane errors clear kardo
             clear_security_cache(client_ip, "login")
             
+            # 🛡️ Check karein ki kya admin login requested hai
+            login_as_admin = request.form.get('login_as_admin') == 'true'
+
+            user_email_lower = user_data.get('email', '').strip().lower() if user_data.get('email') else ""
+            is_user_admin = user_data.get('is_admin', False) or (user_email_lower in DEFAULT_ADMINS)
+
+            if login_as_admin and not is_user_admin:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Access Denied: Your identity registry does not hold administrative clearance.'
+                }), 403
+            
+            if login_as_admin and is_user_admin:
+                session['is_admin_session'] = True
+            else:
+                session.pop('is_admin_session', None)
+            
             login_user(User(user_data))
             session_token = str(uuid.uuid4())
             
@@ -1460,9 +1758,11 @@ def login():
             }
             db.sessions.insert_one(session_data)
             
+            redirect_url = url_for('admin_dashboard') if (login_as_admin and is_user_admin) else url_for('index')
+            
             response = jsonify({
                 'status': 'success', 
-                'redirect_url': url_for('index'),
+                'redirect_url': redirect_url,
                 'message': 'Master security authorization data metrics synchronized successfully.'
             })
             response.set_cookie('nexus_session_token', session_token, httponly=True, secure=False)
@@ -1654,6 +1954,7 @@ def update_last_active():
 @login_required
 def logout():
     logout_user()
+    session.pop('is_admin_session', None)
     flash("Signed out.", "success")
     return redirect(url_for('index'))
 
@@ -1884,68 +2185,6 @@ Nexus Security Team
     share_url = url_for('access_shared_folder', token=token, _external=True)
     return jsonify({"status": "success", "share_url": share_url})
 
-# @app.route('/generate-share-link/<folder_id>', methods=['POST'])
-# @login_required
-# def generate_share_link(folder_id):
-#     data = request.get_json()
-#     password = data.get('password')
-    
-#     # 1. Folder check karo
-#     folder = folders_collection.find_one({"_id": ObjectId(folder_id), "owner": current_user.username})
-#     if not folder:
-#         return jsonify({"status": "error", "message": "Folder not found"}), 404
-
-#     # 2. Privacy Check: Agar folder private hai, toh Email warning bhejo
-#     if not folder.get('is_public', False):
-#         try:
-#             device_info = request.user_agent.string
-            
-#             # IST (Indian Standard Time) calculate karna: UTC + 5:30 hours
-#             ist_time = datetime.utcnow() + timedelta(hours=5, minutes=30)
-#             current_time = ist_time.strftime("%B %d, %Y at %I:%M %p IST")
-            
-#             subject = "⚠️ Security Alert: Private Folder Shared"
-#             body = f"""
-#             Hello {current_user.username},
-            
-#             A sharing link was generated for your PRIVATE folder '{folder['folder_name']}'.
-            
-#             Time: {current_time}
-#             Device: {device_info}
-            
-#             If this was not you, please immediately secure your account.
-            
-#             Regards,
-#             Nexus Security Team
-#             """
-            
-#             dispatch_smtp_secure_email(current_user.email, current_user.username, subject, body)
-#         except Exception as e:
-#             print(f"Non-fatal Email Error: {e}") # Yeh code ko crash nahi hone dega
-
-#     # 3. Password hash karo agar set kiya hai
-#     hashed_pw = generate_password_hash(password) if password else None
-    
-#     # 4. Logic: Agar password hai toh 48hr expiry (172800 sec), warna None (Permanent)
-#     expiry_time = 172800 if password else None 
-    
-#     # 5. Secure Token (Salted)
-#     token = s.dumps(str(folder_id), salt='folder-share-salt')
-    
-#     # 6. DB mein save karo (Token, Password aur Expiry)
-#     folders_collection.update_one(
-#         {"_id": ObjectId(folder_id)},
-#         {"$set": {
-#             "share_token": token,
-#             "share_password": hashed_pw,
-#             "expiry_in_seconds": expiry_time
-#         }}
-#     )
-    
-#     # 7. Public link return karo
-#     share_url = url_for('access_shared_folder', token=token, _external=True)
-#     return jsonify({"status": "success", "share_url": share_url})
-
 @app.route('/share/access/<token>', methods=['GET', 'POST'])
 def access_shared_folder(token):
     # 1. Folder fetch karo (Token verify karne se pehle zaroori hai expiry nikalne ke liye)
@@ -2063,6 +2302,163 @@ The Nexus Cloud Security Team
         dispatch_smtp_secure_email(user_email, username, subject, body)
     except Exception as e:
         print(f"Notification Email Skipped: {e}")
+        
+@app.route('/admin/dashboard')
+@admin_required
+def admin_dashboard():
+    general_assets = list(images_collection.find({"folder_name": {"$regex": "^General$", "$options": "i"}, "in_trash": False}).sort("uploaded_at", -1))
+    all_users = list(users_collection.find({}))
+    active_rules = list(moderation_rules_collection.find({}).sort("created_at", -1))
+    return render_template('admin_dashboard.html', assets=general_assets, users=all_users, default_admins=DEFAULT_ADMINS, rules=active_rules)
+
+@app.route('/admin/promote', methods=['POST'])
+@admin_required
+def admin_promote():
+    data = request.get_json() or {}
+    target_username = data.get('username', '').strip()
+    
+    user = users_collection.find_one({"username": target_username})
+    if not user:
+        return jsonify({"status": "error", "message": "User node not found."}), 404
+        
+    users_collection.update_one({"_id": user["_id"]}, {"$set": {"is_admin": True}})
+    
+    # IST (Indian Standard Time) Formatting
+    ist_time = datetime.utcnow() + timedelta(hours=5, minutes=30)
+    current_time = ist_time.strftime("%B %d, %Y at %I:%M %p IST")
+    
+    # 📧 MAIL 1: ALERT TO DEFAULT MASTER ADMINS (With Authorizer Email)
+    subject_master = "🚨 Security Notice: New Administrator Appointed"
+    body_master = f"""Hello Administrator,
+
+This is an automated security report from the Nexus Control Shield. A new identity profile has been granted administrative access parameters.
+
+[PROMOTED USER DETAILS]
+Account Username: {user['username']}
+Registered Email: {user.get('email', 'N/A')}
+
+[AUTHORIZER DETAILS]
+Authorized By: {current_user.username}
+Authorizer Email: {getattr(current_user, 'email', 'N/A')}
+
+Timestamp: {current_time}
+
+If you did not authorize this deployment, please log into your default root account and revoke permissions immediately.
+
+Best regards,
+The Nexus Cloud Security Team"""
+    
+    for master_email in DEFAULT_ADMINS:
+        try: dispatch_smtp_secure_email(master_email, "Master Admin", subject_master, body_master)
+        except Exception as e: print(f"Master Email error: {e}")
+
+    # 📧 MAIL 2: CONGRATULATIONS TO THE NEW ADMIN (Polite & Formal Warning)
+    if user.get('email'):
+        subject_new_admin = "🎉 Access Granted: Welcome to the Nexus Admin Cluster"
+        body_new_admin = f"""Hello {user['username']},
+
+Congratulations! You have been officially appointed as an Administrator on the Nexus Cloud Platform.
+
+Your identity profile has been successfully integrated into the Core Administrative Matrix. This clearance grants you high-level system parameters to regulate public ingest content schemas, handle directory clusters, and manage global repository security.
+
+With great power comes great responsibility. As a member of the admin cluster, you hold master keys to data structures. We trust you to handle these privileges ethically, securely, and professionally to protect our global user network. Please ensure all system updates and asset management conform strictly to our compliance protocols.
+
+Welcome aboard the core node team.
+
+Best regards,
+The Nexus Global Governance Board"""
+        try:
+            dispatch_smtp_secure_email(user['email'], user['username'], subject_new_admin, body_new_admin)
+        except Exception as e:
+            print(f"New Admin Notification Email Skipped: {e}")
+
+    return jsonify({"status": "success", "message": f"{target_username} promoted to Admin and notified successfully."})
+
+@app.route('/admin/demote', methods=['POST'])
+@admin_required
+def admin_demote():
+    data = request.get_json() or {}
+    target_username = data.get('username', '').strip()
+    
+    user = users_collection.find_one({"username": target_username})
+    if not user: 
+        return jsonify({"status": "error", "message": "User not found."}), 404
+        
+    # 🛡️ BRAHMASTRA LOGIC: Default core 2 admins ko koi touch bhi nahi kar sakta
+    if user.get('email') in DEFAULT_ADMINS:
+        return jsonify({"status": "error", "message": "Critical Denial: Master Core root profiles cannot be demoted."}), 403
+        
+    # 🚫 SELF-DEMOTION SHIELD: Admin khud ko demote nahi kar sakta
+    if user['username'] == current_user.username:
+        return jsonify({"status": "error", "message": "Critical Denial: You cannot revoke your own administrative clearance."}), 400
+        
+    users_collection.update_one({"_id": user["_id"]}, {"$set": {"is_admin": False}})
+    return jsonify({"status": "success", "message": f"{target_username} removed from admin privileges."})
+
+@app.route('/admin/manage-asset/<action>/<image_id>', methods=['POST'])
+@admin_required
+def admin_manage_asset(action, image_id):
+    asset = images_collection.find_one({"_id": ObjectId(image_id)})
+    if not asset: return jsonify({"status": "error", "message": "Asset not found"}), 404
+        
+    if action == 'delete':
+        try:
+            s3_client.delete_object(Bucket=BUCKET_NAME, Key=asset['s3_key'])
+            try: s3_client.delete_object(Bucket=BUCKET_NAME, Key=f"thumb_{asset['s3_key']}")
+            except: pass
+            images_collection.delete_one({"_id": ObjectId(image_id)})
+            return jsonify({"status": "success", "message": "Asset purged completely."})
+        except Exception as e: return jsonify({"status": "error", "message": str(e)})
+            
+    elif action in ['public', 'private']:
+        is_public_flag = (action == 'public')
+        images_collection.update_one({"_id": ObjectId(image_id)}, {"$set": {"is_public": is_public_flag}})
+        return jsonify({"status": "success", "message": "Asset privacy status updated."})
+        
+    return jsonify({"status": "error", "message": "Invalid action."}), 400
+
+# ---------------------------------------------------
+# ERROR OVERRIDE HANDLERS
+# ---------------------------------------------------
+@app.errorhandler(401)
+def unauthorized_error(e):
+    return render_template('401.html', text_override="Access Unauthorized: The requested identity profile is invalid or requires authentication."), 401
+
+@app.errorhandler(403)
+def forbidden_error(e):
+    return render_template('401.html', text_override="Security Shield: Administrative clearance level required to access this matrix node."), 403
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template('404.html'), 404
+
+@app.route('/admin/moderation/add', methods=['POST'])
+@admin_required
+def admin_add_moderation_rule():
+    data = request.get_json() or {}
+    new_label = data.get('label', '').strip().lower()
+    
+    if not new_label:
+        return jsonify({"status": "error", "message": "Security tracking node value cannot be null."}), 400
+        
+    exists = moderation_rules_collection.find_one({"label": new_label})
+    if exists:
+        return jsonify({"status": "error", "message": "This label target registry parameter already exists inside the active shield shield system."}), 400
+        
+    moderation_rules_collection.insert_one({
+        "label": new_label,
+        "created_at": datetime.utcnow()
+    })
+    return jsonify({"status": "success", "message": f"AI Moderation shield updated successfully: Tracking parameter '{new_label}' is now active."})
+
+@app.route('/admin/moderation/delete/<rule_id>', methods=['POST'])
+@admin_required
+def admin_delete_moderation_rule(rule_id):
+    try:
+        moderation_rules_collection.delete_one({"_id": ObjectId(rule_id)})
+        return jsonify({"status": "success", "message": "Dynamic shield tracking parameter removed safely."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # @app.route('/debug-check')
 # def debug_check():

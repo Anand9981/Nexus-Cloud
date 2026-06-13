@@ -498,20 +498,41 @@
 
     document.getElementById('uploadForm').onsubmit = async (e) => {
         e.preventDefault();
-        const btn = document.getElementById('btnText'), spinner = document.getElementById('spinner'), label = document.getElementById('btnLabel'), status = document.getElementById('status'), files = document.getElementById('imageInput').files;
         
-        btn.disabled = true; spinner.classList.remove('hidden'); status.classList.remove('hidden');
+        // 1. Core elements tracking setup reference mapping
+        const btn = document.getElementById('btnText');
+        const spinner = document.getElementById('spinner');
+        const label = document.getElementById('btnLabel');
+        const status = document.getElementById('status');
+        const files = document.getElementById('imageInput').files;
+        
+        // 2. Application states authorization loading locks activation
+        btn.disabled = true; 
+        spinner.classList.remove('hidden'); 
+        status.classList.remove('hidden');
         label.innerText = "Analyzing Content...";
         status.className = "mt-2 p-2 rounded-xl text-[9px] font-bold border bg-slate-50 text-slate-500 border-slate-100 dark:bg-slate-900/50 dark:border-slate-800";
-        status.innerText = "Connecting to AWS AI Engine...";
+        status.innerText = "Connecting to AWS AI Engine & Content Moderation Shield...";
 
         try {
             const res = await fetch('/upload', { method: 'POST', body: new FormData(e.target) });
-            const result = await res.json();
-            if (result.status === 'success') {
+            
+            // Safe response JSON parser block to handle crash states
+            let result;
+            try {
+                result = await res.json();
+            } catch(jsonErr) {
+                result = { status: 'error', message: 'Catastrophic server interface data corruption context.' };
+            }
+
+            // ------------------------------------------------------------------
+            // CASE 1: 100% FULL SUCCESS PIPELINE (All assets passed safely)
+            // ------------------------------------------------------------------
+            if (res.ok && result.status === 'success') {
                 status.className = "mt-2 p-2 rounded-xl text-[9px] font-bold border bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30";
                 status.innerText = "✅ Sync Successful!";
                 
+                // Live preview tray injection workflow allocation loop
                 const gridContainer = document.getElementById('preview-grid-container');
                 gridContainer.innerHTML = "";
                 
@@ -520,33 +541,94 @@
                     gridContainer.innerHTML += `
                         <div class="relative inline-block group aspect-square w-full rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-slate-100 dark:bg-slate-900">
                             <img src="${tempImageUrl}" class="w-full h-full object-cover transition-transform duration-200 hover:scale-105">
-                            <div class="absolute bottom-1 right-1 bg-nexus/90 backdrop-blur-sm text-white text-[5.5px] font-black px-1 py-0.5 rounded uppercase tracking-tight animate-pulse">AITAGGING...</div>
+                            <div class="absolute bottom-1 right-1 bg-nexus/90 backdrop-blur-sm text-white text-[5.5px] font-black px-1 py-0.5 rounded uppercase tracking-tight animate-pulse">AI PASSED</div>
                         </div>
                     `;
                 }
                 
+                // Show preview area block safely
                 document.getElementById('preview-section').classList.remove('hidden');
                 
+                // Clear active running timeouts parameters completely
                 if (autoPreviewDismissTimer) clearTimeout(autoPreviewDismissTimer);
                 
+                // 20 Seconds standard view cooldown interval assignment from old code
                 autoPreviewDismissTimer = setTimeout(() => {
                     location.reload();
                 }, 20000);
                 
+                // Reset form visual layout items perfectly
                 document.getElementById('uploadForm').reset();
                 document.getElementById('file-list').classList.add('hidden');
                 document.getElementById('drop-zone-content').classList.remove('hidden');
-                btn.disabled = false; spinner.classList.add('hidden'); selectFolder('General');
                 
-            } else {
-                status.className = "mt-2 p-2 rounded-xl text-[9px] font-bold border bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/30";
-                status.innerText = "❌ Sync Failed: " + result.message;
-                btn.disabled = false; spinner.classList.add('hidden'); label.innerText = "Start Cloud Upload";
+                // Re-enable primary entry click components configurations state
+                btn.disabled = false; 
+                spinner.classList.add('hidden'); 
+                selectFolder('General');
+            } 
+            
+            // ------------------------------------------------------------------
+            // CASE 2: PARTIAL SUCCESS PIPELINE (Some images saved, some blocked)
+            // ------------------------------------------------------------------
+            else if (res.ok && result.status === 'partial_success') {
+                status.className = "mt-2 p-2 rounded-xl text-[10px] font-black border bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/40 leading-relaxed";
+                status.innerText = result.message;
+                
+                // Reset files selection matrix immediately to avoid duplicate transaction operations
+                document.getElementById('uploadForm').reset();
+                document.getElementById('file-list').classList.add('hidden');
+                document.getElementById('drop-zone-content').classList.remove('hidden');
+                
+                if (autoPreviewDismissTimer) clearTimeout(autoPreviewDismissTimer);
+                
+                // Re-enable operations and load configuration screen after 7 seconds delay readout
+                btn.disabled = false; 
+                spinner.classList.add('hidden'); 
+                selectFolder('General');
+                
+                setTimeout(() => {
+                    location.reload();
+                }, 7000);
             }
+            
+            // ------------------------------------------------------------------
+            // CASE 3: EXPLICIT SAFETY POLICY VIOLATION BLOCK (Server 400 Warning)
+            // ------------------------------------------------------------------
+            else if (result.status === 'safety_error' || res.status === 400) {
+                status.className = "mt-2 p-2 rounded-xl text-[10px] font-black border bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/40 leading-relaxed";
+                status.innerText = result.message || "🚨 Upload Restricted: Security shield intercepted assets due to critical safety policy weapons violations.";
+                
+                // Reset tracking labels to operational base state so user can select different safe image files
+                btn.disabled = false; 
+                spinner.classList.add('hidden'); 
+                label.innerText = "Start Cloud Upload";
+            }
+            
+            // ------------------------------------------------------------------
+            // CASE 4: STANDARD REGULAR SYSTEM SYNC FAULT (Generic Database/S3 Errors)
+            // ------------------------------------------------------------------
+            else {
+                status.className = "mt-2 p-2 rounded-xl text-[9px] font-bold border bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/30";
+                status.innerText = "❌ Sync Failed: " + (result.message || "Unknown internal cloud storage exception framework.");
+                
+                btn.disabled = false; 
+                spinner.classList.add('hidden'); 
+                label.innerText = "Start Cloud Upload";
+            }
+
         } catch(err) { 
-            btn.disabled = false; spinner.classList.add('hidden'); label.innerText = "Start Cloud Upload";
+            // ------------------------------------------------------------------
+            // CASE 5: RAW CATASTROPHIC NETWORK DROPOUT (Server completely unreachable)
+            // ------------------------------------------------------------------
+            console.error("Critical upload connection intercept dropout context details:", err);
+            
+            btn.disabled = false; 
+            spinner.classList.add('hidden'); 
+            label.innerText = "Start Cloud Upload";
+            
             status.className = "mt-2 p-2 rounded-xl text-[9px] font-bold border bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/30";
-            status.innerText = "❌ Network Error! Cloud Connection Failed.";
+            status.innerText = "❌ Network Error! Cloud Synchronization Matrix Connection Timeout Failed.";
         }
     };
 
