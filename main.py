@@ -1245,43 +1245,41 @@ def request_account_deletion():
 # ---------------------------------------------------
 # SMTP EMAIL PIPELINE (Airtight HTTPS EmailJS Engine - Port 443)
 # ---------------------------------------------------
-import urllib.request
-import json
-
 def send_email_via_api_handler(target_email, subject, body_content):
-    """Dispatches email via EmailJS HTTPS API over Port 443 to use your dedicated Gmail address instantly without any 401 approval holds."""
+    """Dispatches email via EmailJS HTTPS API over Port 443 with server-side authorization token to bypass 403 locks."""
     try:
         service_id = os.getenv('EMAILJS_SERVICE_ID')
         template_id = os.getenv('EMAILJS_TEMPLATE_ID')
         public_key = os.getenv('EMAILJS_PUBLIC_KEY')
+        private_key = os.getenv('EMAILJS_PRIVATE_KEY') # Secure backend access token
         
-        if not service_id or not template_id or not public_key:
-            print("❌ [API EMAIL ENGINE] Aborted: EmailJS Env variables missing on Render Settings.", flush=True)
+        if not service_id or not template_id or not public_key or not private_key:
+            print("❌ [API EMAIL ENGINE] Aborted: Missing required EmailJS variables on Render Settings.", flush=True)
             return False
 
-        # ✅ LOGIC INTACT: HTML formatting parsing check from your original pipeline code
-        # Isse verify hota hai ki user ko raw text bhejni hai ya reset password ka formal visual HTML box matrix
+        # ✅ LOGIC INTACT: Rich template HTML formatting check from your original core layout
         is_html_content = "</div>" in body_content or "<div" in body_content
         if is_html_content:
-            print("📝 [API EMAIL ENGINE] Content detected as rich HTML layout infrastructure.", flush=True)
+            print("📝 [API EMAIL ENGINE] Content verified as rich template HTML interface schema.", flush=True)
         else:
-            print("📝 [API EMAIL ENGINE] Content detected as plain standard text data structure.", flush=True)
+            print("📝 [API EMAIL ENGINE] Content verified as standard raw text string layout.", flush=True)
 
-        # Build EmailJS standard payload structure mapping safely
+        # Build authorized multi-token payload for server-side REST security specifications
         payload_data = {
             "service_id": service_id,
             "template_id": template_id,
             "user_id": public_key,
+            "accessToken": private_key,  # Added core private token to eliminate 403 Forbidden errors
             "template_params": {
                 "to_email": target_email,
                 "subject": subject,
-                "message": body_content  # EmailJS passes raw string layouts securely into template tags
+                "message": body_content
             }
         }
 
-        print(f"📡 [API EMAIL ENGINE] Route: Initializing EmailJS Tunneling over Port 443 for: {target_email}...", flush=True)
+        print(f"📡 [API EMAIL ENGINE] Action: Tunneling request over Port 443 to EmailJS endpoints for: {target_email}...", flush=True)
         
-        # Dispatch request payload over secure web Port 443 smoothly (Bypasses Render's firewalled network restrictions)
+        # Dispatch transaction packet over secure web container tunnel smoothly
         api_request = urllib.request.Request(
             "https://api.emailjs.com/api/v1.0/email/send",
             data=json.dumps(payload_data).encode('utf-8'),
@@ -1293,20 +1291,20 @@ def send_email_via_api_handler(target_email, subject, body_content):
         
         with urllib.request.urlopen(api_request, timeout=10) as http_response:
             server_feedback = http_response.read().decode('utf-8')
-            print(f"✅ [API EMAIL ENGINE] Success! EmailJS transaction complete: {server_feedback}", flush=True)
+            print(f"✅ [API EMAIL ENGINE] Server Authorization Validated! Email dispatched successfully: {server_feedback}", flush=True)
             return True
             
     except Exception as api_exception:
-        print(f"❌ [API EMAIL CRITICAL ERROR] EmailJS tunnel dropouts encountered: {str(api_exception)}", flush=True)
+        print(f"❌ [API EMAIL CRITICAL ERROR] EmailJS transaction rejected by remote host: {str(api_exception)}", flush=True)
         return False
 
 def dispatch_smtp_secure_email(target_email, username, subject, body_content):
     """Universal Router Engine."""
-    # ✅ LOGIC INTACT: Preserved exact parameter signatures (4 arguments) to prevent route crashes across OTP/Admin routes
+    # ✅ LOGIC INTACT: Preserved 4 arguments signature setup to completely avoid any TypeError system crashes
     return send_email_via_api_handler(target_email, subject, body_content)
 
 def send_email(target_email, subject, body_content):
-    """🚨 CRITICAL NAME-ERROR ALIAS: Preserves backward compatibility mapping nodes (3 arguments) perfectly."""
+    """🚨 CRITICAL NAME-ERROR ALIAS: Maps 3 arguments layout triggers from reset-password views seamlessly."""
     return send_email_via_api_handler(target_email, subject, body_content)
 
 # # ---------------------------------------------------
