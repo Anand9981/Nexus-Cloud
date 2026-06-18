@@ -30,6 +30,7 @@ from itsdangerous import URLSafeTimedSerializer
 from bson.objectid import ObjectId
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formatdate, make_msgid
 from apscheduler.schedulers.background import BackgroundScheduler
 
 # ---------------------------------------------------
@@ -1243,69 +1244,68 @@ def request_account_deletion():
 # ACCOUNT DELETION & RECOVERY ENDPOINTS
 #----------------------------------------------------------------------------------------------
 # ---------------------------------------------------
-# SMTP EMAIL PIPELINE (Airtight HTTPS EmailJS Engine - Port 443)
+# SMTP EMAIL PIPELINE (Nexus Cloud Core Mail Engine)
 # ---------------------------------------------------
-def send_email_via_api_handler(target_email, subject, body_content):
-    """Dispatches email via EmailJS HTTPS API over Port 443 with server-side authorization token to bypass 403 locks."""
+from email.utils import formatdate, make_msgid
+
+def send_sync_email_optimized(target_email, subject, body_content):
+    """Core synchronous email dispatcher with absolute security headers to bypass filters."""
     try:
-        service_id = os.getenv('EMAILJS_SERVICE_ID')
-        template_id = os.getenv('EMAILJS_TEMPLATE_ID')
-        public_key = os.getenv('EMAILJS_PUBLIC_KEY')
-        private_key = os.getenv('EMAILJS_PRIVATE_KEY') # Secure backend access token
+        sender_identity = os.getenv('SMTP_SENDER')
+        smtp_app_secret = os.getenv('SMTP_PASSWORD')
         
-        if not service_id or not template_id or not public_key or not private_key:
-            print("❌ [API EMAIL ENGINE] Aborted: Missing required EmailJS variables on Render Settings.", flush=True)
+        if not sender_identity or not smtp_app_secret:
+            print("❌ [SMTP SHIELD] Aborted: Environmental credentials missing.", flush=True)
             return False
 
-        # ✅ LOGIC INTACT: Rich template HTML formatting check from your original core layout
-        is_html_content = "</div>" in body_content or "<div" in body_content
-        if is_html_content:
-            print("📝 [API EMAIL ENGINE] Content verified as rich template HTML interface schema.", flush=True)
+        msg = MIMEMultipart()
+        msg['From'] = f"Nexus Cloud Support <{sender_identity}>"
+        msg['To'] = target_email
+        msg['Subject'] = subject
+        
+        # Security validation headers configuration
+        msg['Date'] = formatdate(localtime=True)
+        msg['Message-ID'] = make_msgid()
+        
+        # HTML template parsing validation checkpoint
+        if "</div>" in body_content or "<div" in body_content:
+            msg.attach(MIMEText(body_content, 'html'))
         else:
-            print("📝 [API EMAIL ENGINE] Content verified as standard raw text string layout.", flush=True)
-
-        # Build authorized multi-token payload for server-side REST security specifications
-        payload_data = {
-            "service_id": service_id,
-            "template_id": template_id,
-            "user_id": public_key,
-            "accessToken": private_key,  # Added core private token to eliminate 403 Forbidden errors
-            "template_params": {
-                "to_email": target_email,
-                "subject": subject,
-                "message": body_content
-            }
-        }
-
-        print(f"📡 [API EMAIL ENGINE] Action: Tunneling request over Port 443 to EmailJS endpoints for: {target_email}...", flush=True)
+            msg.attach(MIMEText(body_content, 'plain'))
         
-        # Dispatch transaction packet over secure web container tunnel smoothly
-        api_request = urllib.request.Request(
-            "https://api.emailjs.com/api/v1.0/email/send",
-            data=json.dumps(payload_data).encode('utf-8'),
-            headers={
-                "Content-Type": "application/json"
-            },
-            method="POST"
-        )
+        print(f"📡 [SMTP SHIELD] Initializing connection for: {target_email}...", flush=True)
         
-        with urllib.request.urlopen(api_request, timeout=10) as http_response:
-            server_feedback = http_response.read().decode('utf-8')
-            print(f"✅ [API EMAIL ENGINE] Server Authorization Validated! Email dispatched successfully: {server_feedback}", flush=True)
+        # Primary Pipeline: Port 465 SSL Direct Connect
+        try:
+            server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=7)
+            server.login(sender_identity, smtp_app_secret)
+            server.sendmail(sender_identity, target_email, msg.as_string())
+            server.quit()
+            print(f"✅ [SMTP SHIELD] Success: Email delivered via Port 465 SSL", flush=True)
+            return True
+        except Exception as e465:
+            print(f"⚠️ Port 465 SSL skipped, trying Port 587 TLS: {str(e465)}", flush=True)
+            
+            # Secondary Pipeline: Fallback Port 587 TLS Connect
+            server = smtplib.SMTP('smtp.gmail.com', 587, timeout=7)
+            server.starttls()
+            server.login(sender_identity, smtp_app_secret)
+            server.sendmail(sender_identity, target_email, msg.as_string())
+            server.quit()
+            print(f"✅ [SMTP SHIELD] Success: Email delivered via Port 587 TLS", flush=True)
             return True
             
-    except Exception as api_exception:
-        print(f"❌ [API EMAIL CRITICAL ERROR] EmailJS transaction rejected by remote host: {str(api_exception)}", flush=True)
+    except Exception as final_err:
+        print(f"❌ [SMTP CRITICAL ERROR] Transmission failure: {str(final_err)}", flush=True)
         return False
 
 def dispatch_smtp_secure_email(target_email, username, subject, body_content):
-    """Universal Router Engine."""
-    # ✅ LOGIC INTACT: Preserved 4 arguments signature setup to completely avoid any TypeError system crashes
-    return send_email_via_api_handler(target_email, subject, body_content)
+    """Universal wrapper for OTP and Admin routes preserving signature compatibility."""
+    return send_sync_email_optimized(target_email, subject, body_content)
 
 def send_email(target_email, subject, body_content):
-    """🚨 CRITICAL NAME-ERROR ALIAS: Maps 3 arguments layout triggers from reset-password views seamlessly."""
-    return send_email_via_api_handler(target_email, subject, body_content)
+    """Backward compatibility alias mapping for template system recovery paths."""
+    return send_sync_email_optimized(target_email, subject, body_content)
 
 # # ---------------------------------------------------
 # # SMTP EMAIL PIPELINE (Async Threading Engine)
